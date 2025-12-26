@@ -8,9 +8,9 @@ using FinDesk.Models;
 namespace FinDesk.Services
 {
     /// <summary>
-    /// Сервіс для виявлення та видалення дублікатів транзакцій
+    /// Сервіс doc_bursa виявлення та видалення дублікатів транзакцій
     /// Використовує 3 стратегії: Hash, TransactionId, Date+Amount+Description
-    /// </summary>
+    /// </doc_bursa>
     public class DuplicationService
     {
         private readonly DatabaseService _db;
