@@ -1,76 +1,85 @@
-using CommunityToolkit.Mvvm.ComponentModel;
-using FinDesk.Models;
-using FinDesk.Services;
-using LiveChartsCore;
-using LiveChartsCore.SkiaSharpView;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using FinDesk.Models;
+using FinDesk.Services;
 
-namespace FinDesk.ViewModels;
-
-public sealed partial class DashboardViewModel : ViewModelBase
+namespace FinDesk.ViewModels
 {
-    private readonly AnalyticsService _analytics;
-    private readonly MainWindowViewModel _shell;
-
-    [ObservableProperty] private decimal income;
-    [ObservableProperty] private decimal expense;
-    [ObservableProperty] private decimal net;
-
-    [ObservableProperty] private ISeries[] pieSeries = Array.Empty<ISeries>();
-    [ObservableProperty] private ISeries[] lineSeries = Array.Empty<ISeries>();
-    [ObservableProperty] private Axis[] xAxes = Array.Empty<Axis>();
-    [ObservableProperty] private Axis[] yAxes = Array.Empty<Axis>();
-
-    public DashboardViewModel(AnalyticsService analytics, MainWindowViewModel shell)
+    public partial class DashboardViewModel : ObservableObject
     {
-        _analytics = analytics;
-        _shell = shell;
-    }
+        private readonly DatabaseService _db;
 
-    public async Task RefreshAsync(DateTime fromUtc, DateTime toUtc)
-    {
-        var cards = await _analytics.GetCardsAsync(fromUtc, toUtc);
-        Income = cards.income;
-        Expense = cards.expense;
-        Net = cards.net;
+        [ObservableProperty]
+        private decimal totalIncome;
 
-        var byCat = await _analytics.ByCategoryAsync(fromUtc, toUtc);
-        PieSeries = byCat
-            .Where(kv => kv.Value > 0)
-            .OrderByDescending(kv => kv.Value)
-            .Take(8)
-            .Select(kv => new PieSeries<decimal>
+        [ObservableProperty]
+        private decimal totalExpenses;
+
+        [ObservableProperty]
+        private decimal balance;
+
+        [ObservableProperty]
+        private List<Category> categories = new();
+
+        [ObservableProperty]
+        private string selectedPeriod = "Поточний місяць";
+
+        public List<string> Periods { get; } = new()
+        {
+            "Поточний місяць",
+            "Минулий місяць",
+            "Поточний рік",
+            "Весь час"
+        };
+
+        public DashboardViewModel()
+        {
+            _db = new DatabaseService();
+            LoadData();
+        }
+
+        [RelayCommand]
+        private void LoadData()
+        {
+            var (from, to) = GetDateRange();
+            var transactions = _db.GetTransactions(from, to);
+
+            TotalIncome = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
+            TotalExpenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
+            Balance = TotalIncome - TotalExpenses;
+
+            Categories = transactions
+                .Where(t => t.Amount < 0)
+                .GroupBy(t => t.Category)
+                .Select(g => new Category
+                {
+                    Name = g.Key,
+                    Amount = Math.Abs(g.Sum(t => t.Amount)),
+                    Count = g.Count()
+                })
+                .OrderByDescending(c => c.Amount)
+                .ToList();
+        }
+
+        partial void OnSelectedPeriodChanged(string value)
+        {
+            LoadData();
+        }
+
+        private (DateTime?, DateTime?) GetDateRange()
+        {
+            var now = DateTime.Now;
+
+            return SelectedPeriod switch
             {
-                Values = new[] { kv.Value },
-                Name = kv.Key.ToString()
-            })
-            .Cast<ISeries>()
-            .ToArray();
-
-        var byDay = await _analytics.ExpenseByDayAsync(fromUtc, toUtc);
-        var xs = byDay.Keys.Select(d => d.ToString("MM-dd")).ToArray();
-        var ys = byDay.Values.ToArray();
-
-        LineSeries = new ISeries[]
-        {
-            new LineSeries<decimal>
-            {
-                Values = ys,
-                Name = "Витрати/день",
-                GeometrySize = 6
-            }
-        };
-
-        XAxes = new[]
-        {
-            new Axis { Labels = xs }
-        };
-        YAxes = new[]
-        {
-            new Axis { }
-        };
+                "Поточний місяць" => (new DateTime(now.Year, now.Month, 1), now),
+                "Минулий місяць" => (new DateTime(now.Year, now.Month, 1).AddMonths(-1), new DateTime(now.Year, now.Month, 1).AddDays(-1)),
+                "Поточний рік" => (new DateTime(now.Year, 1, 1), now),
+                _ => (null, null)
+            };
+        }
     }
 }
