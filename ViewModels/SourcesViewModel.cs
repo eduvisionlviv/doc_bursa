@@ -67,7 +67,7 @@ namespace FinDesk.ViewModels
         }
 
         [RelayCommand]
-        private void SaveSource()
+        private async Task SaveSource()
         {
             if (string.IsNullOrWhiteSpace(NewSourceName))
             {
@@ -91,8 +91,8 @@ namespace FinDesk.ViewModels
                 IsEnabled = true
             };
 
-            _db.AddDataSource(source);
-            LoadSources();
+            await _db.AddDataSource(source);
+            await LoadSources();
             IsAddingSource = false;
 
             MessageBox.Show("Джерело даних додано успішно!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -200,4 +200,5 @@ private void SyncSource(DataSource source)
         }
     }
 }
+
 
