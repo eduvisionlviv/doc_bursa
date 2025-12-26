@@ -9,11 +9,8 @@ using FinDesk.Services;
 
 namespace FinDesk.ViewModels
 {
-using doc_bursa.Models;
-    public class AnalyticsViewModel : ViewModelBase
-    using doc_bursa.Services;
-    {
-        private readonly DatabaseService _db;
+    public classs AnalyticsViewModel : ViewModelBase
+            private readonly DatabaseService _db;
         private readonly AnalyticsService _analytics;
 
         // Властивості для статистики
