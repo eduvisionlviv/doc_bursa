@@ -1,5 +1,6 @@
 using System;
-Fix DuplicationService to doc_bursa namespaceusing System.Linq;
+using System.Collections.Generic;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using doc_bursa.Models;
