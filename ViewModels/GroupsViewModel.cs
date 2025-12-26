@@ -5,8 +5,8 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using doc_bursa.Models;
-using doc_bursa.Services;
+using FinDesk.Models;
+using FinDesk.Services;
 
 namespace doc_bursa.ViewModels
 {
