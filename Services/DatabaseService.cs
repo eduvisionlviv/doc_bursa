@@ -52,6 +52,16 @@ namespace FinDesk.Services
                     Pattern TEXT NOT NULL,
                     Category TEXT NOT NULL
                 );
+
+                            CREATE TABLE IF NOT EXISTS MasterGroups (
+                Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                Name TEXT NOT NULL,
+                Description TEXT,
+                CreatedDate TEXT NOT NULL,
+                IsActive INTEGER DEFAULT 1,
+                Color TEXT,
+                AccountNumbers TEXT
+            );
             ";
             command.ExecuteNonQuery();
         }
@@ -267,4 +277,86 @@ namespace FinDesk.Services
             command.ExecuteNonQuery();
         }
     }
+
+            // MasterGroup CRUD operations
+        
+        public void SaveMasterGroup(MasterGroup group)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            if (group.Id == 0)
+            {
+                command.CommandText = @"
+                    INSERT INTO MasterGroups (Name, Description, CreatedDate, IsActive, Color, AccountNumbers)
+                    VALUES ($name, $description, $createdDate, $isActive, $color, $accountNumbers)";
+            }
+            else
+            {
+                command.CommandText = @"
+                    UPDATE MasterGroups 
+                    SET Name = $name, Description = $description, IsActive = $isActive, 
+                        Color = $color, AccountNumbers = $accountNumbers
+                    WHERE Id = $id";
+                command.Parameters.AddWithValue("$id", group.Id);
+            }
+
+            command.Parameters.AddWithValue("$name", group.Name ?? string.Empty);
+            command.Parameters.AddWithValue("$description", group.Description ?? string.Empty);
+            command.Parameters.AddWithValue("$createdDate", group.CreatedDate.ToString("o"));
+            command.Parameters.AddWithValue("$isActive", group.IsActive ? 1 : 0);
+            command.Parameters.AddWithValue("$color", group.Color ?? "#2196F3");
+            command.Parameters.AddWithValue("$accountNumbers", string.Join(",", group.AccountNumbers));
+
+            command.ExecuteNonQuery();
+        }
+
+        public List<MasterGroup> GetMasterGroups()
+        {
+            var groups = new List<MasterGroup>();
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM MasterGroups WHERE IsActive = 1";
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var group = new MasterGroup
+                {
+                    Id = reader.GetInt32(0),
+                    Name = reader.GetString(1),
+                    Description = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                    CreatedDate = DateTime.Parse(reader.GetString(3)),
+                    IsActive = reader.GetInt32(4) == 1,
+                    Color = reader.IsDBNull(5) ? "#2196F3" : reader.GetString(5)
+                };
+
+                var accountNumbers = reader.IsDBNull(6) ? string.Empty : reader.GetString(6);
+                if (!string.IsNullOrWhiteSpace(accountNumbers))
+                {
+                    foreach (var account in accountNumbers.Split(','))
+                    {
+                        group.AccountNumbers.Add(account);
+                    }
+                }
+
+                groups.Add(group);
+            }
+
+            return groups;
+        }
+
+        public void DeleteMasterGroup(int id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "UPDATE MasterGroups SET IsActive = 0 WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
+                }
 }
