@@ -1,0 +1,44 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:FinDesk.ViewModels"
+        x:Class="FinDesk.MainWindow"
+        Width="1100" Height="720"
+        MinWidth="980" MinHeight="640"
+        Title="FinDesk — Personal Finance">
+
+  <Grid RowDefinitions="Auto,*" ColumnDefinitions="260,*">
+    <!-- Top bar -->
+    <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#111827" Padding="16">
+      <DockPanel>
+        <TextBlock DockPanel.Dock="Left" Text="FinDesk" Foreground="White" FontSize="18" FontWeight="SemiBold"/>
+        <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}" Foreground="#D1D5DB" VerticalAlignment="Center"/>
+      </DockPanel>
+    </Border>
+
+    <!-- Left nav -->
+    <Border Grid.Row="1" Grid.Column="0" Background="#0B1220" Padding="12">
+      <StackPanel Spacing="10">
+        <TextBlock Text="Навігація" Foreground="#9CA3AF" FontSize="12"/>
+        <Button Content="Дашборд" Command="{Binding GoDashboard}" />
+        <Button Content="Транзакції" Command="{Binding GoTransactions}" />
+        <Button Content="Імпорт" Command="{Binding GoImport}" />
+        <Button Content="Банки / API" Command="{Binding GoSources}" />
+
+        <Border Height="1" Background="#1F2937" Margin="0,8,0,8"/>
+
+        <TextBlock Text="Період" Foreground="#9CA3AF" FontSize="12"/>
+        <ComboBox ItemsSource="{Binding PeriodPresets}"
+                  SelectedItem="{Binding SelectedPreset}"
+                  DisplayMemberBinding="{Binding Display}" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <DatePicker SelectedDate="{Binding FromDate}" Width="115"/>
+          <DatePicker SelectedDate="{Binding ToDate}" Width="115"/>
+        </StackPanel>
+        <Button Content="Оновити дані" Command="{Binding RefreshAll}" />
+      </StackPanel>
+    </Border>
+
+    <!-- Content -->
+    <ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding CurrentPage}" />
+  </Grid>
+</Window>
