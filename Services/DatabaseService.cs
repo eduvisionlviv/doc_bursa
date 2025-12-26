@@ -254,5 +254,17 @@ namespace FinDesk.Services
 
             return rules;
         }
+
+                // Delete Transaction
+        public void DeleteTransaction(int id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+            
+            var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM Transactions WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
+        }
     }
 }
