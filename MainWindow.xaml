@@ -40,10 +40,16 @@
                     Style="{StaticResource NavButtonStyle}"
                     Command="{Binding NavigateCommand}"
                     CommandParameter="Groups"/>
+
+                <Button Content="Аналітика"
+                        Style="{StaticResource NavButtonStyle}"
+                        Command="{Binding NavigateCommand}"
+                        CommandParameter="Analytics"/>
             </StackPanel>
         </Border>
 
         <ContentControl Grid.Column="1" Content="{Binding CurrentView}" Margin="20"/>
     </Grid>
 </Window>
+
 
