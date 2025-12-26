@@ -6,11 +6,14 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using FinDesk.Models;
 using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
 
 namespace FinDesk.ViewModels
 {
-    public classs AnalyticsViewModel : ViewModelBase
-            private readonly DatabaseService _db;
+    public class AnalyticsViewModel : ViewModelBase
+    {
+        private readonly DatabaseService _db;
         private readonly AnalyticsService _analytics;
 
         // Властивості для статистики
