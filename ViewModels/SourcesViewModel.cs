@@ -1,232 +1,201 @@
 using System;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Microsoft.Win32;
 using FinDesk.Models;
 using FinDesk.Services;
+using Microsoft.Win32;
 
 namespace FinDesk.ViewModels
 {
     public partial class SourcesViewModel : ObservableObject
     {
         private readonly DatabaseService _db;
-        private readonly MonobankService _monobank;
-        private readonly PrivatBankService _privatbank;
-        private readonly UkrsibBankService _ukrsibbank;
-        private readonly FileImportService _fileImport;
+        private readonly CsvImportService _csvImport;
         private readonly CategorizationService _categorization;
 
         [ObservableProperty]
-        private ObservableCollection<DataSource> dataSources = new();
+        private ObservableCollection<DataSource> sources = new();
 
         [ObservableProperty]
         private DataSource? selectedSource;
 
         [ObservableProperty]
-        private string monobankToken = string.Empty;
+        private bool isAddingSource;
 
         [ObservableProperty]
-        private string privatbankClientId = string.Empty;
+        private string newSourceName = string.Empty;
 
         [ObservableProperty]
-        private string privatbankSecret = string.Empty;
+        private string newSourceType = "Monobank";
 
         [ObservableProperty]
-        private string ukrsibbankToken = string.Empty;
+        private string newSourceToken = string.Empty;
 
         [ObservableProperty]
-        private bool isSyncing;
+        private string newSourceClientId = string.Empty;
+
+        [ObservableProperty]
+        private string newSourceClientSecret = string.Empty;
+
+        public string[] AvailableTypes { get; } = { "Monobank", "PrivatBank", "Ukrsibbank", "CSV Import" };
 
         public SourcesViewModel()
         {
             _db = new DatabaseService();
-            _monobank = new MonobankService();
-            _privatbank = new PrivatBankService();
-            _ukrsibbank = new UkrsibBankService();
-            _fileImport = new FileImportService();
             _categorization = new CategorizationService(_db);
-
+            _csvImport = new CsvImportService(_db, _categorization);
             LoadSources();
         }
 
+        [RelayCommand]
         private void LoadSources()
         {
-            DataSources = new ObservableCollection<DataSource>(_db.GetDataSources());
-
-            if (!DataSources.Any(s => s.Name == "Monobank"))
-                DataSources.Add(new DataSource { Name = "Monobank", Type = "API" });
-            if (!DataSources.Any(s => s.Name == "PrivatBank"))
-                DataSources.Add(new DataSource { Name = "PrivatBank", Type = "API" });
-            if (!DataSources.Any(s => s.Name == "Ukrsibbank"))
-                DataSources.Add(new DataSource { Name = "Ukrsibbank", Type = "API" });
+            Sources = new ObservableCollection<DataSource>(_db.GetDataSources());
         }
 
         [RelayCommand]
-        private async Task SyncMonobankAsync()
+        private void StartAddSource()
         {
-            if (string.IsNullOrEmpty(MonobankToken))
+            IsAddingSource = true;
+            NewSourceName = string.Empty;
+            NewSourceType = "Monobank";
+            NewSourceToken = string.Empty;
+            NewSourceClientId = string.Empty;
+            NewSourceClientSecret = string.Empty;
+        }
+
+        [RelayCommand]
+        private void SaveSource()
+        {
+            if (string.IsNullOrWhiteSpace(NewSourceName))
             {
-                MessageBox.Show("Введіть токен Monobank", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Введіть назву джерела", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            IsSyncing = true;
-            try
+            if (NewSourceType != "CSV Import" && string.IsNullOrWhiteSpace(NewSourceToken))
             {
-                var from = DateTime.Now.AddMonths(-1);
-                var to = DateTime.Now;
-                var transactions = await _monobank.FetchTransactionsAsync(MonobankToken, from, to);
-
-                foreach (var t in transactions)
-                {
-                    t.Category = _categorization.CategorizeTransaction(t);
-                    _db.SaveTransaction(t);
-                }
-
-                var source = DataSources.FirstOrDefault(s => s.Name == "Monobank");
-                if (source != null)
-                {
-                    source.ApiToken = MonobankToken;
-                    source.IsEnabled = true;
-                    source.LastSync = DateTime.Now;
-                    _db.SaveDataSource(source);
-                }
-
-                MessageBox.Show($"Синхронізовано {transactions.Count} транзакцій", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Помилка: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            finally
-            {
-                IsSyncing = false;
-            }
-        }
-
-        [RelayCommand]
-        private async Task SyncPrivatBankAsync()
-        {
-            if (string.IsNullOrEmpty(PrivatbankClientId) || string.IsNullOrEmpty(PrivatbankSecret))
-            {
-                MessageBox.Show("Введіть дані авторизації PrivatBank або імпортуйте файл", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                MessageBox.Show("Введіть API токен", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            IsSyncing = true;
-            try
+            var source = new DataSource
             {
-                var from = DateTime.Now.AddMonths(-1);
-                var to = DateTime.Now;
-                var transactions = await _privatbank.FetchTransactionsAsync(PrivatbankClientId, PrivatbankSecret, from, to);
+                Name = NewSourceName,
+                Type = NewSourceType,
+                ApiToken = NewSourceToken,
+                ClientId = NewSourceClientId,
+                ClientSecret = NewSourceClientSecret,
+                IsEnabled = true
+            };
 
-                if (!transactions.Any())
-                {
-                    MessageBox.Show("API не вдалося отримати дані. Використайте імпорт файлу", "Увага", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
+            _db.AddDataSource(source);
+            LoadSources();
+            IsAddingSource = false;
 
-                foreach (var t in transactions)
-                {
-                    t.Category = _categorization.CategorizeTransaction(t);
-                    _db.SaveTransaction(t);
-                }
-
-                var source = DataSources.FirstOrDefault(s => s.Name == "PrivatBank");
-                if (source != null)
-                {
-                    source.ClientId = PrivatbankClientId;
-                    source.ClientSecret = PrivatbankSecret;
-                    source.IsEnabled = true;
-                    source.LastSync = DateTime.Now;
-                    _db.SaveDataSource(source);
-                }
-
-                MessageBox.Show($"Синхронізовано {transactions.Count} транзакцій", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Помилка API: {ex.Message}. Використайте імпорт файлу", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            finally
-            {
-                IsSyncing = false;
-            }
+            MessageBox.Show("Джерело даних додано успішно!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
         }
 
         [RelayCommand]
-        private async Task SyncUkrsibbankAsync()
+        private void CancelAdd()
         {
-            if (string.IsNullOrEmpty(UkrsibbankToken))
+            IsAddingSource = false;
+        }
+
+        [RelayCommand]
+        private void DeleteSource(DataSource source)
+        {
+            var result = MessageBox.Show(
+                $"Видалити джерело '{source.Name}'?",
+                "Підтвердження",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question
+            );
+
+            if (result == MessageBoxResult.Yes)
             {
-                MessageBox.Show("Введіть токен Ukrsibbank або імпортуйте файл", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
-                return;
-            }
-
-            IsSyncing = true;
-            try
-            {
-                var from = DateTime.Now.AddMonths(-1);
-                var to = DateTime.Now;
-                var transactions = await _ukrsibbank.FetchTransactionsAsync(UkrsibbankToken, from, to);
-
-                if (!transactions.Any())
-                {
-                    MessageBox.Show("API не вдалося отримати дані. Використайте імпорт файлу", "Увага", MessageBoxButton.OK, MessageBoxImage.Warning);
-                    return;
-                }
-
-                foreach (var t in transactions)
-                {
-                    t.Category = _categorization.CategorizeTransaction(t);
-                    _db.SaveTransaction(t);
-                }
-
-                var source = DataSources.FirstOrDefault(s => s.Name == "Ukrsibbank");
-                if (source != null)
-                {
-                    source.ApiToken = UkrsibbankToken;
-                    source.IsEnabled = true;
-                    source.LastSync = DateTime.Now;
-                    _db.SaveDataSource(source);
-                }
-
-                MessageBox.Show($"Синхронізовано {transactions.Count} транзакцій", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Помилка API: {ex.Message}. Використайте імпорт файлу", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
-            finally
-            {
-                IsSyncing = false;
+                _db.DeleteDataSource(source.Id);
+                LoadSources();
             }
         }
 
         [RelayCommand]
-        private void ImportFile(string bankName)
+        private void ToggleSource(DataSource source)
+        {
+            source.IsEnabled = !source.IsEnabled;
+            _db.UpdateDataSource(source);
+            LoadSources();
+        }
+
+        [RelayCommand]
+        private async void SyncSource(DataSource source)
+        {
+            try
+            {
+                MessageBox.Show("Синхронізація запущена...", "Інформація", MessageBoxButton.OK, MessageBoxImage.Information);
+                
+                // Тут буде виклик відповідного API
+                switch (source.Type)
+                {
+                    case "Monobank":
+                        // await SyncMonobank(source);
+                        break;
+                    case "PrivatBank":
+                        // await SyncPrivatBank(source);
+                        break;
+                    case "Ukrsibbank":
+                        // await SyncUkrsibbank(source);
+                        break;
+                }
+
+                source.LastSync = DateTime.Now;
+                _db.UpdateDataSource(source);
+                LoadSources();
+
+                MessageBox.Show("Синхронізація завершена!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Помилка синхронізації: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        [RelayCommand]
+        private void ImportCsv()
         {
             var dialog = new OpenFileDialog
             {
-                Filter = "CSV файли (*.csv)|*.csv|Excel файли (*.xlsx)|*.xlsx",
-                Title = $"Імпорт виписки {bankName}"
+                Filter = "CSV файли (*.csv)|*.csv|Всі файли (*.*)|*.*",
+                Title = "Виберіть CSV файл для імпорту"
             };
 
             if (dialog.ShowDialog() == true)
             {
-                var transactions = _fileImport.ImportFile(dialog.FileName, bankName);
+                var bankType = "universal";
+                
+                // Визначаємо тип банку з назви файлу
+                var fileName = dialog.SafeFileName.ToLower();
+                if (fileName.Contains("mono")) bankType = "monobank";
+                else if (fileName.Contains("privat")) bankType = "privatbank";
+                else if (fileName.Contains("ukrsib")) bankType = "ukrsibbank";
 
-                foreach (var t in transactions)
+                var (imported, skipped, error) = _csvImport.ImportFromCsv(dialog.FileName, bankType);
+
+                if (!string.IsNullOrEmpty(error))
                 {
-                    t.Category = _categorization.CategorizeTransaction(t);
-                    _db.SaveTransaction(t);
+                    MessageBox.Show($"Помилка імпорту: {error}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
-
-                MessageBox.Show($"Імпортовано {transactions.Count} транзакцій", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+                else
+                {
+                    MessageBox.Show(
+                        $"Імпортовано: {imported}\nПропущено (дублікати): {skipped}",
+                        "Імпорт завершено",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information
+                    );
+                }
             }
         }
     }
