@@ -7,8 +7,8 @@ using FinDesk.Models;
 using FinDesk.Services;
 using Microsoft.Win32;
 using System.Threading.Tasks;
-using doc_bursa.Models;
-using doc_bursa.Services;
+using FinDesk.Models;
+using FinDesk.Services;
 
 namespace FinDesk.ViewModels
 {
@@ -203,6 +203,7 @@ private void SyncSource(DataSource source)
         }
     }
 }
+
 
 
 

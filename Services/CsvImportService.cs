@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using doc_bursa.Models;
+using FinDesk.Models;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     public class CsvImportService
     {
@@ -136,3 +136,4 @@ namespace doc_bursa.Services
         }
     }
 }
+

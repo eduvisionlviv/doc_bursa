@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace doc_bursa.Models{
+namespace FinDesk.Models{
     /// <summary>
     /// Група рахунків для об'єднання та аналізу
     /// </summary>
@@ -87,3 +87,4 @@ namespace doc_bursa.Models{
         }
     }
 }
+

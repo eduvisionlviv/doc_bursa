@@ -1,6 +1,6 @@
 using System;
 
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     public class DataSource
     {
@@ -14,3 +14,4 @@ namespace doc_bursa.Models
         public DateTime? LastSync { get; set; }
     }
 }
+

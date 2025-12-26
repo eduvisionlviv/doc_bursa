@@ -1,10 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using doc_bursa.Models;
-using doc_bursa.Services;
+using FinDesk.Models;
+using FinDesk.Services;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     /// <summary>
     /// Сервіс для аналітики фінансових даних
@@ -242,3 +242,4 @@ namespace doc_bursa.Services
         public decimal TransactionGrowth { get; set; }
     }
 }
+

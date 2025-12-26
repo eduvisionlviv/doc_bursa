@@ -4,7 +4,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Linq;
 
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     /// <summary>
     /// Майстер група для об'єднання декількох рахунків в одну групу для спільної аналітики
@@ -171,3 +171,4 @@ namespace doc_bursa.Models
         }
     }
 }
+
