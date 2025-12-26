@@ -2,7 +2,7 @@ using System;
     using System.Security.Cryptography;
 using System.Text;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     /// <summary>
     /// Сервіс для безпечного шифрування та дешифрування токенів API
