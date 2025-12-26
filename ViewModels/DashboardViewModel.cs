@@ -9,9 +9,7 @@ using FinDesk.Services;
 namespace FinDesk.ViewModels
 {
     public partial class DashboardViewModel : ObservableObject
-    doc_bursa
-        private readonly DatabaseService _db;
-doc_bursa
+    {        private readonly DatabaseService _db;
         [ObservableProperty]
         private decimal totalIncome;
 
@@ -83,4 +81,5 @@ doc_bursa
         }
     }
 }
+
 
