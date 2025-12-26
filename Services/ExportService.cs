@@ -4,10 +4,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using FinDesk.Models;
-
-namespace FinDesk.Services
-{
+using doc_bursa.Models;
+namespace doc_bursa.Services{
     public class ExportService
     {
         // Експорт транзакцій у форматі CSV
