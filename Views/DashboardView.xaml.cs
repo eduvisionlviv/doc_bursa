@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using FinDesk.ViewModels;
 
 namespace FinDesk.Views
 {
@@ -7,6 +8,7 @@ namespace FinDesk.Views
         public DashboardView()
         {
             InitializeComponent();
+            DataContext = new DashboardViewModel();
         }
     }
 }
