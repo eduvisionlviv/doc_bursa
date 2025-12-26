@@ -1,0 +1,88 @@
+<UserControl x:Class="doc_bursa.Views.GroupsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="900">
+    <Grid Margin="20">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" Text="Майстер Групи Рахунків" 
+                   FontSize="28" FontWeight="Bold" Margin="0,0,0,20"/>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="20"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Panel: Groups List -->
+            <Border Grid.Column="0" Background="White" BorderBrush="#DDD" BorderThickness="1" 
+                    CornerRadius="8" Padding="16">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <TextBlock Grid.Row="0" Text="Групи" FontSize="18" FontWeight="Bold" Margin="0,0,0,10"/>
+
+                    <ListBox Grid.Row="1" ItemsSource="{Binding Groups}" 
+                             SelectedItem="{Binding SelectedGroup}" 
+                             DisplayMemberPath="Name" Margin="0,0,0,10"/>
+
+                    <Button Grid.Row="2" Content="Створити Групу" 
+                            Command="{Binding CreateGroupCommand}" 
+                            Background="#007ACC" Foreground="White" 
+                            Padding="12,8" FontSize="14" BorderThickness="0" Cursor="Hand"/>
+                </Grid>
+            </Border>
+
+            <!-- Right Panel: Group Details -->
+            <Border Grid.Column="2" Background="White" BorderBrush="#DDD" BorderThickness="1" 
+                    CornerRadius="8" Padding="20">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Деталі Групи" FontSize="20" FontWeight="Bold" Margin="0,0,0,15"/>
+
+                        <!-- Group Name -->
+                        <TextBlock Text="Назва групи" FontSize="14" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding SelectedGroup.Name, UpdateSourceTrigger=PropertyChanged}" 
+                                 Padding="8" FontSize="14" Margin="0,0,0,15"/>
+
+                        <!-- Accounts in Group -->
+                        <TextBlock Text="Рахунки в групі" FontSize="14" Margin="0,0,0,5"/>
+                        <ComboBox ItemsSource="{Binding AvailableAccounts}" 
+                                  SelectedItem="{Binding SelectedAccount}" 
+                                  DisplayMemberPath="AccountName" 
+                                  Padding="8" FontSize="14" Margin="0,0,0,10"/>
+                        <Button Content="Додати Рахунок" 
+                                Command="{Binding AddAccountToGroupCommand}" 
+                                Background="#28A745" Foreground="White" 
+                                Padding="10,6" FontSize="13" BorderThickness="0" Margin="0,0,0,15"/>
+
+                        <ListBox ItemsSource="{Binding SelectedGroup.Accounts}" 
+                                 DisplayMemberPath="AccountName" Height="150" Margin="0,0,0,15"/>
+
+                        <!-- Actions -->
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Зберегти" Command="{Binding SaveGroupCommand}" 
+                                    Background="#007ACC" Foreground="White" 
+                                    Padding="15,8" FontSize="14" BorderThickness="0" Margin="0,0,10,0"/>
+                            <Button Content="Видалити" Command="{Binding DeleteGroupCommand}" 
+                                    Background="#DC3545" Foreground="White" 
+                                    Padding="15,8" FontSize="14" BorderThickness="0"/>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</UserControl>
