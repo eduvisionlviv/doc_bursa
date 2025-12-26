@@ -98,7 +98,7 @@
                     DragDrop.DragOver="OnDragOver"
                     DragDrop.Drop="OnDrop">
               <StackPanel Spacing="6">
-                <TextBlock Text="Drag & Drop файли сюди." Foreground="#D1D5DB"/>
+                <TextBlock Text="Drag &amp; Drop файли сюди." Foreground="#D1D5DB"/>
                 <TextBlock Text="Підтримка: CSV, XLSX. Дедуплікація увімкнена." Foreground="#9CA3AF"/>
               </StackPanel>
             </Border>
