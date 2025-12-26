@@ -35,9 +35,15 @@
                        Style="{StaticResource NavButtonStyle}"
                        Command="{Binding NavigateCommand}"
                        CommandParameter="Sources"/>
+
+            <Button Content="Групи"
+                    Style="{StaticResource NavButtonStyle}"
+                    Command="{Binding NavigateCommand}"
+                    CommandParameter="Groups"/>
             </StackPanel>
         </Border>
 
         <ContentControl Grid.Column="1" Content="{Binding CurrentView}" Margin="20"/>
     </Grid>
 </Window>
+
