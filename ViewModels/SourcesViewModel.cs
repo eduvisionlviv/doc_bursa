@@ -129,38 +129,38 @@ namespace FinDesk.ViewModels
             LoadSources();
         }
 
-        [RelayCommand]
-        private async void SyncSource(DataSource source)
+[RelayCommand]
+private void SyncSource(DataSource source)
+{
+    try
+    {
+        MessageBox.Show("Синхронізація запущена...", "Інформація", MessageBoxButton.OK, MessageBoxImage.Information);
+        
+        // Тут буде виклик відповідного API
+        switch (source.Type)
         {
-            try
-            {
-                MessageBox.Show("Синхронізація запущена...", "Інформація", MessageBoxButton.OK, MessageBoxImage.Information);
-                
-                // Тут буде виклик відповідного API
-                switch (source.Type)
-                {
-                    case "Monobank":
-                        // await SyncMonobank(source);
-                        break;
-                    case "PrivatBank":
-                        // await SyncPrivatBank(source);
-                        break;
-                    case "Ukrsibbank":
-                        // await SyncUkrsibbank(source);
-                        break;
-                }
-
-                source.LastSync = DateTime.Now;
-                _db.UpdateDataSource(source);
-                LoadSources();
-
-                MessageBox.Show("Синхронізація завершена!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Помилка синхронізації: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
-            }
+            case "Monobank":
+                // await SyncMonobank(source);
+                break;
+            case "PrivatBank":
+                // await SyncPrivatBank(source);
+                break;
+            case "Ukrsibbank":
+                // await SyncUkrsibbank(source);
+                break;
         }
+
+        source.LastSync = DateTime.Now;
+        _db.UpdateDataSource(source);
+        LoadSources();
+
+        MessageBox.Show("Синхронізація завершена!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+    }
+    catch (Exception ex)
+    {
+        MessageBox.Show($"Помилка синхронізації: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+    }
+}
 
         [RelayCommand]
         private void ImportCsv()
@@ -200,3 +200,4 @@ namespace FinDesk.ViewModels
         }
     }
 }
+
