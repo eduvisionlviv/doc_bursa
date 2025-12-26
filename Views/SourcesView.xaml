@@ -1,0 +1,96 @@
+<UserControl x:Class="FinDesk.Views.SourcesView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:FinDesk.ViewModels">
+    <UserControl.DataContext>
+        <vm:SourcesViewModel/>
+    </UserControl.DataContext>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Text="Джерела даних" 
+                  FontSize="28" 
+                  FontWeight="SemiBold" 
+                  Margin="0,0,0,20"/>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,15">
+                    <StackPanel>
+                        <TextBlock Text="Monobank" 
+                                  FontSize="18" 
+                                  FontWeight="SemiBold" 
+                                  Margin="0,0,0,15"/>
+
+                        <TextBlock Text="X-Token:" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding MonobankToken}" 
+                                Margin="0,0,0,10"/>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Синхронізувати" 
+                                   Command="{Binding SyncMonobankCommand}"
+                                   IsEnabled="{Binding IsSyncing, Converter={StaticResource InverseBoolConverter}}"
+                                   Margin="0,0,10,0"/>
+                            <Button Content="Імпортувати файл" 
+                                   Command="{Binding ImportFileCommand}"
+                                   CommandParameter="Monobank"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,15">
+                    <StackPanel>
+                        <TextBlock Text="PrivatBank" 
+                                  FontSize="18" 
+                                  FontWeight="SemiBold" 
+                                  Margin="0,0,0,15"/>
+
+                        <TextBlock Text="Client ID:" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding PrivatbankClientId}" 
+                                Margin="0,0,0,10"/>
+
+                        <TextBlock Text="Client Secret:" Margin="0,0,0,5"/>
+                        <PasswordBox x:Name="PrivatSecret" Margin="0,0,0,10"/>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Синхронізувати" 
+                                   Command="{Binding SyncPrivatBankCommand}"
+                                   IsEnabled="{Binding IsSyncing, Converter={StaticResource InverseBoolConverter}}"
+                                   Margin="0,0,10,0"/>
+                            <Button Content="Імпортувати файл" 
+                                   Command="{Binding ImportFileCommand}"
+                                   CommandParameter="PrivatBank"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Ukrsibbank" 
+                                  FontSize="18" 
+                                  FontWeight="SemiBold" 
+                                  Margin="0,0,0,15"/>
+
+                        <TextBlock Text="API Token:" Margin="0,0,0,5"/>
+                        <TextBox Text="{Binding UkrsibbankToken}" 
+                                Margin="0,0,0,10"/>
+
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="Синхронізувати" 
+                                   Command="{Binding SyncUkrsibbankCommand}"
+                                   IsEnabled="{Binding IsSyncing, Converter={StaticResource InverseBoolConverter}}"
+                                   Margin="0,0,10,0"/>
+                            <Button Content="Імпортувати файл" 
+                                   Command="{Binding ImportFileCommand}"
+                                   CommandParameter="Ukrsibbank"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>
