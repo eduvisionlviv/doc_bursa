@@ -1,23 +1,33 @@
-name: build-windows-exe
+name: Build FinDesk
+
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
   build:
     runs-on: windows-latest
+    
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Publish (single-file, self-contained)
-        run: dotnet publish FinDesk.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: FinDesk-win-x64
-          path: bin/Release/net8.0/win-x64/publish/FinDesk.exe
+    - uses: actions/checkout@v4
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    - name: Restore dependencies
+      run: dotnet restore FinDesk/FinDesk.csproj
+    
+    - name: Build
+      run: dotnet build FinDesk/FinDesk.csproj -c Release --no-restore
+    
+    - name: Publish
+      run: dotnet publish FinDesk/FinDesk.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: FinDesk-Windows
+        path: ./publish/FinDesk.exe
