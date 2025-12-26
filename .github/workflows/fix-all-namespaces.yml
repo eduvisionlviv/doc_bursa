@@ -3,6 +3,9 @@ name: Fix All Namespaces
 on:
   workflow_dispatch:
 
+  permissions:
+  contents: write
+
 jobs:
   fix-namespaces:
     runs-on: windows-latest
