@@ -1,0 +1,237 @@
+<UserControl x:Class="doc_bursa.Views.GroupsView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:materialDesign="http://materialdesigninxaml.net/winfx/xaml/themes"
+             mc:Ignorable="d" 
+             d:DesignHeight="600" d:DesignWidth="900">
+    
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Header -->
+        <TextBlock Grid.Row="0" 
+                   Text="Майстер Групи Рахунків" 
+                   Style="{StaticResource MaterialDesignHeadline4TextBlock}"
+                   Margin="0,0,0,16"/>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left Panel: Groups List -->
+            <materialDesign:Card Grid.Column="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Create New Group -->
+                    <StackPanel Grid.Row="0" Margin="16">
+                        <TextBlock Text="Створити нову групу" 
+                                   Style="{StaticResource MaterialDesignSubtitle1TextBlock}"
+                                   Margin="0,0,0,8"/>
+                        
+                        <TextBox materialDesign:HintAssist.Hint="Назва групи"
+                                 Text="{Binding NewGroupName, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource MaterialDesignOutlinedTextBox}"
+                                 Margin="0,0,0,8"/>
+                        
+                        <Button Content="Створити"
+                                Command="{Binding CreateGroupCommand}"
+                                Style="{StaticResource MaterialDesignRaisedButton}"
+                                materialDesign:ButtonAssist.CornerRadius="4"
+                                Height="36"/>
+                    </StackPanel>
+
+                    <!-- Groups ListBox -->
+                    <ListBox Grid.Row="1" 
+                             ItemsSource="{Binding Groups}"
+                             SelectedItem="{Binding SelectedGroup}"
+                             Margin="8">
+                        <ListBox.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Margin="8">
+                                    <TextBlock Text="{Binding Name}" 
+                                               FontWeight="Bold"
+                                               FontSize="14"/>
+                                    <TextBlock Text="{Binding AccountNumbers.Count, StringFormat='Рахунків: {0}'}"
+                                               Foreground="Gray"
+                                               FontSize="12"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ListBox.ItemTemplate>
+                    </ListBox>
+
+                    <!-- Delete Button -->
+                    <Button Grid.Row="2"
+                            Content="Видалити групу"
+                            Command="{Binding DeleteGroupCommand}"
+                            Style="{StaticResource MaterialDesignOutlinedButton}"
+                            materialDesign:ButtonAssist.CornerRadius="4"
+                            Margin="16"/>
+                </Grid>
+            </materialDesign:Card>
+
+            <!-- Right Panel: Group Details -->
+            <materialDesign:Card Grid.Column="2">
+                <Grid Margin="16">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Group Info -->
+                    <StackPanel Grid.Row="0">
+                        <TextBlock Text="{Binding SelectedGroup.Name, FallbackValue='Виберіть групу'}"
+                                   Style="{StaticResource MaterialDesignHeadline5TextBlock}"
+                                   Margin="0,0,0,8"/>
+                        
+                        <TextBlock Text="{Binding SelectedGroup.Description}"
+                                   Foreground="Gray"
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,16"/>
+                    </StackPanel>
+
+                    <!-- Statistics Cards -->
+                    <Grid Grid.Row="1" Margin="0,0,0,16">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="8"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <materialDesign:Card Grid.Column="0" Padding="12" Background="#4CAF50">
+                            <StackPanel>
+                                <TextBlock Text="Баланс" 
+                                           Foreground="White" 
+                                           FontSize="12"
+                                           Opacity="0.8"/>
+                                <TextBlock Text="{Binding SelectedGroup.TotalBalance, StringFormat='{}{0:N2} грн'}"
+                                           Foreground="White"
+                                           FontSize="18"
+                                           FontWeight="Bold"/>
+                            </StackPanel>
+                        </materialDesign:Card>
+
+                        <materialDesign:Card Grid.Column="2" Padding="12" Background="#2196F3">
+                            <StackPanel>
+                                <TextBlock Text="Дебет" 
+                                           Foreground="White" 
+                                           FontSize="12"
+                                           Opacity="0.8"/>
+                                <TextBlock Text="{Binding SelectedGroup.TotalDebit, StringFormat='{}{0:N2} грн'}"
+                                           Foreground="White"
+                                           FontSize="18"
+                                           FontWeight="Bold"/>
+                            </StackPanel>
+                        </materialDesign:Card>
+
+                        <materialDesign:Card Grid.Column="4" Padding="12" Background="#FF9800">
+                            <StackPanel>
+                                <TextBlock Text="Кредит" 
+                                           Foreground="White" 
+                                           FontSize="12"
+                                           Opacity="0.8"/>
+                                <TextBlock Text="{Binding SelectedGroup.TotalCredit, StringFormat='{}{0:N2} грн'}"
+                                           Foreground="White"
+                                           FontSize="18"
+                                           FontWeight="Bold"/>
+                            </StackPanel>
+                        </materialDesign:Card>
+                    </Grid>
+
+                    <!-- Accounts DataGrid -->
+                    <Grid Grid.Row="2">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0"
+                                   Text="Рахунки в групі"
+                                   Style="{StaticResource MaterialDesignSubtitle1TextBlock}"
+                                   Margin="0,0,0,8"/>
+
+                        <DataGrid Grid.Row="1"
+                                  ItemsSource="{Binding SelectedGroup.AccountNumbers}"
+                                  AutoGenerateColumns="False"
+                                  CanUserAddRows="False"
+                                  materialDesign:DataGridAssist.CellPadding="8"
+                                  materialDesign:DataGridAssist.ColumnHeaderPadding="8">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Номер рахунку" 
+                                                    Binding="{Binding}"
+                                                    Width="*"/>
+                                <DataGridTemplateColumn Header="Дії" Width="100">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="Видалити"
+                                                    Command="{Binding DataContext.RemoveAccountFromGroupCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                    CommandParameter="{Binding}"
+                                                    Style="{StaticResource MaterialDesignFlatButton}"
+                                                    Foreground="Red"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </Grid>
+
+                    <!-- Add Account Section -->
+                    <StackPanel Grid.Row="3" Margin="0,16,0,0">
+                        <TextBlock Text="Додати рахунок до групи"
+                                   Style="{StaticResource MaterialDesignSubtitle2TextBlock}"
+                                   Margin="0,0,0,8"/>
+                        
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <ComboBox Grid.Column="0"
+                                      ItemsSource="{Binding AvailableAccounts}"
+                                      materialDesign:HintAssist.Hint="Виберіть рахунок"
+                                      Style="{StaticResource MaterialDesignOutlinedComboBox}"
+                                      x:Name="AccountSelector"/>
+
+                            <Button Grid.Column="2"
+                                    Content="Додати"
+                                    Command="{Binding AddAccountToGroupCommand}"
+                                    CommandParameter="{Binding SelectedItem, ElementName=AccountSelector}"
+                                    Style="{StaticResource MaterialDesignRaisedButton}"
+                                    materialDesign:ButtonAssist.CornerRadius="4"
+                                    Height="56"/>
+                        </Grid>
+                    </StackPanel>
+                </Grid>
+            </materialDesign:Card>
+
+            <!-- Loading Overlay -->
+            <Grid Grid.ColumnSpan="3" 
+                  Background="#80000000" 
+                  Visibility="{Binding IsLoading, Converter={StaticResource BooleanToVisibilityConverter}}">
+                <ProgressBar Style="{StaticResource MaterialDesignCircularProgressBar}"
+                             Value="0"
+                             IsIndeterminate="True"
+                             Width="50"
+                             Height="50"/>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>
