@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using FinDesk.Models;
+using doc_bursa.Models;
 
 namespace FinDesk.Services
 {
@@ -70,3 +71,4 @@ namespace FinDesk.Services
         }
     }
 }
+
