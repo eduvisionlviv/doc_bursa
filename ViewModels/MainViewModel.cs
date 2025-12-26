@@ -23,8 +23,10 @@ namespace FinDesk.ViewModels
                 "Dashboard" => new DashboardView(),
                 "Transactions" => new TransactionsView(),
                 "Sources" => new SourcesView(),
+                                "Groups" => new GroupsView(),
                 _ => CurrentView
             };
         }
     }
 }
+
