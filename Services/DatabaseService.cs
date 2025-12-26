@@ -3,10 +3,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Data.Sqlite;
-using doc_bursa.Models;
-using doc_bursa.Models;
+using FinDesk.Models;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     public class DatabaseService
     {
