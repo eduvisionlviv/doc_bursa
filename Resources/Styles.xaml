@@ -1,8 +1,10 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:sys="clr-namespace:System;assembly=mscorlib">
+                   xmlns:cvt="clr-namespace:FinDesk.Converters">
 
     <BooleanToVisibilityConverter x:Key="BoolToVisConverter"/>
+    <cvt:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisConverter"/>
     
     <sys:Boolean x:Key="TrueValue">True</sys:Boolean>
     <sys:Boolean x:Key="FalseValue">False</sys:Boolean>
