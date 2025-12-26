@@ -1,38 +1,44 @@
-# PowerShell script to fix all FinDesk namespace references to doc_bursa
-# Run this script from the root of the repository
+# Скрипт для виправлення namespace в проекті doc_bursa
+# Цей скрипт змінює всі namespace з doc_bursa.* на FinDesk.*
 
-$ErrorActionPreference = "Stop"
+$projectPath = "D:\a\doc_bursa\doc_bursa"
 
-Write-Host "Starting namespace fix..." -ForegroundColor Green
+# Список файлів для оновлення
+$filesToUpdate = @(
+    "Models\AccountGroup.cs",
+    "Models\DataSource.cs", 
+    "Models\MasterGroup.cs",
+    "Models\Account.cs",
+    "Models\Budget.cs",
+    "Models\Category.cs",
+    "Models\RecurringTransaction.cs"
+)
 
-# Get all .cs files recursively
-$csFiles = Get-ChildItem -Path . -Include *.cs -Recurse
-
-foreach ($file in $csFiles) {
-    Write-Host "Processing: $($file.FullName)" -ForegroundColor Yellow
+foreach ($file in $filesToUpdate) {
+    $fullPath = Join-Path $projectPath $file
     
-    # Read file content
-    $content = Get-Content $file.FullName -Raw -Encoding UTF8
-    
-    # Replace namespace declarations
-    $content = $content -replace 'namespace FinDesk\.Services', 'namespace doc_bursa.Services'
-    $content = $content -replace 'namespace FinDesk\.Models', 'namespace doc_bursa.Models'
-    $content = $content -replace 'namespace FinDesk\.ViewModels', 'namespace doc_bursa.ViewModels'
-    $content = $content -replace 'namespace FinDesk\.Converters', 'namespace doc_bursa.Converters'
-    $content = $content -replace 'namespace FinDesk\.Resources', 'namespace doc_bursa.Resources'
-    $content = $content -replace 'namespace FinDesk', 'namespace doc_bursa'
-    
-    # Replace using statements
-    $content = $content -replace 'using FinDesk\.Services', 'using doc_bursa.Services'
-    $content = $content -replace 'using FinDesk\.Models', 'using doc_bursa.Models'
-    $content = $content -replace 'using FinDesk\.ViewModels', 'using doc_bursa.ViewModels'
-    $content = $content -replace 'using FinDesk\.Converters', 'using doc_bursa.Converters'
-    $content = $content -replace 'using FinDesk\.Resources', 'using doc_bursa.Resources'
-    $content = $content -replace 'using FinDesk', 'using doc_bursa'
-    
-    # Write back to file
-    Set-Content -Path $file.FullName -Value $content -Encoding UTF8 -NoNewline
+    if (Test-Path $fullPath) {
+        Write-Host "Оновлюю файл: $file"
+        
+        # Читаємо вміст файлу
+        $content = Get-Content $fullPath -Raw -Encoding UTF8
+        
+        # Замінюємо namespace
+        $content = $content -replace 'namespace doc_bursa\.Models', 'namespace FinDesk.Models'
+        
+        # Додаємо using директиву, якщо її немає
+        if ($content -notmatch 'using FinDesk\.Models;') {
+            $content = $content -replace '(using System[^;]*;[\r\n]+)', "`$1using FinDesk.Models;`r`n"
+        }
+        
+        # Зберігаємо файл
+        [System.IO.File]::WriteAllText($fullPath, $content, [System.Text.UTF8Encoding]::new($false))
+        
+        Write-Host "✓ Файл $file оновлено" -ForegroundColor Green
+    }
+    else {
+        Write-Host "✗ Файл не знайдено: $fullPath" -ForegroundColor Red
+    }
 }
 
-Write-Host "Namespace fix completed!" -ForegroundColor Green
-Write-Host "Total files processed: $($csFiles.Count)" -ForegroundColor Cyan
+Write-Host "`nГотово! Тепер виконайте: dotnet build FinDesk.csproj -c Release --no-restore" -ForegroundColor Cyan
