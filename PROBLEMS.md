@@ -1,81 +1,104 @@
 # Project Problems Tracking
 
-## Build Errors (10 total)
+## Critical Issues - Namespace Inconsistency
 
-### Status: 🔴 CRITICAL - Build Failing
-
-Last updated: 2025-12-27 00:00 EET
+Last updated: 2025-12-27 00:37 EET
 
 ---
 
-## Compilation Errors
+## 🔴 КРИТИЧНІ ПРОБЛЕМИ
 
-### 1. Services/ExportService.cs#L4
-**Error:** A using clause must precede all other elements defined in the namespace except extern alias declarations
-**Status:** ❌ Not Fixed
-**Priority:** HIGH
+### 1. Models/Transaction.cs
+**Проблема:** Використовується неправильний namespace `doc_bursa.Models` замість `FinDesk.Models`
+**Рядок:** 3
+**Статус:** ❌ Не виправлено
+**Пріоритет:** КРИТИЧНИЙ
+**Виправлення:** Замінити `namespace doc_bursa.Models` на `namespace FinDesk.Models`
 
-### 2. ViewModels/DashboardViewModel.cs#L16
-**Error:** Member modifier 'private' must precede the member type and name
-**Status:** ❌ Not Fixed
-**Priority:** HIGH
+### 2. Services/DatabaseService.cs  
+**Проблема 2.1:** Дублювання using directive
+**Рядки:** 6-7
+**Деталі:** `using doc_bursa.Models;` повторюється двічі
+**Статус:** ❌ Не виправлено
+**Пріоритет:** ВИСОКИЙ
 
-### 3. Services/ExportService.cs#L3
-**Error:** A using clause must precede all other elements defined in the namespace except extern alias declarations
-**Status:** ❌ Not Fixed
-**Priority:** HIGH
+**Проблема 2.2:** Неправильний namespace у using
+**Рядок:** 6
+**Деталі:** Використовується `using doc_bursa.Models;` замість `using FinDesk.Models;`
+**Статус:** ❌ Не виправлено
+**Пріоритет:** КРИТИЧНИЙ
 
-### 4. ViewModels/DashboardViewModel.cs#L12
-**Error:** } expected
-**Status:** ❌ Not Fixed
-**Priority:** HIGH
+**Проблема 2.3:** Неправильний namespace
+**Рядок:** 8
+**Деталі:** `namespace doc_bursa.Services` має бути `namespace FinDesk.Services`
+**Статус:** ❌ Не виправлено
+**Пріоритет:** КРИТИЧНИЙ
 
-### 5. Services/EncryptionService.cs#L3
-**Error:** A using clause must precede all other elements defined in the namespace except extern alias declarations
-**Status:** ❌ Not Fixed
-**Priority:** HIGH
+### 3. ViewModels/AnalyticsViewModel.cs
+**Проблема:** Конфлікт namespace - використовуються одночасно FinDesk та doc_bursa
+**Рядки:** 7-10
+**Деталі:** 
+- using FinDesk.Models;
+- using FinDesk.Services;
+- using doc_bursa.Models;
+- using doc_bursa.Services;
+**Статус:** ❌ Не виправлено
+**Пріоритет:** КРИТИЧНИЙ
+**Виправлення:** Видалити рядки 9-10 (doc_bursa using statements)
 
-### 6. ViewModels/DashboardViewModel.cs#L12
-**Error:** { expected
-**Status:** ❌ Not Fixed
-**Priority:** HIGH
+### 4. Services/EncryptionService.cs
+**Проблема:** Невірне форматування using directive
+**Рядок:** 1
+**Деталі:** `using System;` має 4 пробіли відступу на початку
+**Статус:** ❌ Не виправлено
+**Пріоритет:** СЕРЕДНІЙ
+**Виправлення:** Видалити відступ, using має починатися з першої позиції
 
-### 7. Services/EncryptionService.cs#L2
-**Error:** ; expected
-**Status:** ❌ Not Fixed
-**Priority:** HIGH
-
-### 8. ViewModels/DashboardViewModel.cs#L11
-**Error:** Syntax error, ',' expected
-**Status:** ❌ Not Fixed
-**Priority:** HIGH
-
-### 9. Services/EncryptionService.cs#L2
-**Error:** Syntax error, ',' expected
-**Status:** ❌ Not Fixed
-**Priority:** HIGH
-
-### 10. Services/ExportService.cs#L2
-**Error:** A using clause must precede all other elements defined in the namespace except extern alias declarations
-**Status:** ❌ Not Fixed
-**Priority:** HIGH
-
----
-
-## Fix Plan
-
-1. ✅ Create PROBLEMS.md file
-2. ⏳ Fix Services/EncryptionService.cs (errors #5, #7, #9)
-3. ⏳ Fix Services/ExportService.cs (errors #1, #3, #10)
-4. ⏳ Fix ViewModels/DashboardViewModel.cs (errors #2, #4, #6, #8)
-5. ⏳ Test build
-6. ⏳ Update this file with results
-7. ⏳ Repeat until all errors are fixed
+### 5. Services/ExportService.cs
+**Проблема:** Неправильний namespace
+**Рядок:** 8
+**Деталі:** `namespace doc_bursa.Services{` має бути `namespace FinDesk.Services` (також додати пробіл перед {)
+**Статус:** ❌ Не виправлено
+**Пріоритет:** КРИТИЧНИЙ
 
 ---
 
-## Notes
+## ✅ ВИПРАВЛЕНІ ПРОБЛЕМИ
 
-- All errors are related to namespace and using directive placement
-- Need to ensure using directives come before namespace declarations
-- DashboardViewModel has syntax errors with brackets and modifiers
+1. ~~Services/EncryptionService.cs - using clause placement~~ - ВИПРАВЛЕНО
+2. ~~Services/ExportService.cs - using clause placement~~ - ВИПРАВЛЕНО  
+3. ~~ViewModels/DashboardViewModel.cs - syntax errors~~ - ВИПРАВЛЕНО
+
+---
+
+## 📋 ПЛАН ВИПРАВЛЕНЬ
+
+1. ✅ Створити оновлений PROBLEMS.md
+2. ⏳ Виправити всі Models файли на namespace FinDesk.Models
+3. ⏳ Виправити всі Services файли на namespace FinDesk.Services
+4. ⏳ Видалити дублювання using у DatabaseService.cs
+5. ⏳ Виправити конфлікти namespace у ViewModels
+6. ⏳ Виправити форматування EncryptionService.cs
+7. ⏳ Перевірити решту файлів на узгодженість namespace
+8. ⏳ Виконати build проекту для перевірки
+
+---
+
+## 🎯 ЗАГАЛЬНА СТРАТЕГІЯ
+
+**Основна проблема:** Проект має неузгодженість у namespace. Назва проекту - FinDesk (згідно з .csproj файлом), але деякі файли використовують doc_bursa.
+
+**Рішення:** Привести всі файли до єдиного стандарту namespace:
+- FinDesk.Models
+- FinDesk.Services  
+- FinDesk.ViewModels
+- FinDesk.Views
+- FinDesk.Converters
+
+---
+
+## 📝 ПРИМІТКИ
+
+- Потрібно перевірити ВСІ файли проекту на узгодженість namespace
+- Після виправлення namespace потрібно rebuild проекту
+- Рекомендується використати глобальний Find & Replace для заміни `doc_bursa` на `FinDesk`
