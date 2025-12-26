@@ -1,44 +1,171 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:vm="clr-namespace:FinDesk.ViewModels"
+        xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.Avalonia;assembly=LiveChartsCore.SkiaSharpView.Avalonia"
         x:Class="FinDesk.MainWindow"
-        Width="1100" Height="720"
+        Width="1120" Height="740"
         MinWidth="980" MinHeight="640"
         Title="FinDesk — Personal Finance">
 
-  <Grid RowDefinitions="Auto,*" ColumnDefinitions="260,*">
+  <Grid RowDefinitions="Auto,*">
+
     <!-- Top bar -->
-    <Border Grid.Row="0" Grid.ColumnSpan="2" Background="#111827" Padding="16">
+    <Border Grid.Row="0" Background="#111827" Padding="14">
       <DockPanel>
         <TextBlock DockPanel.Dock="Left" Text="FinDesk" Foreground="White" FontSize="18" FontWeight="SemiBold"/>
         <TextBlock DockPanel.Dock="Right" Text="{Binding StatusText}" Foreground="#D1D5DB" VerticalAlignment="Center"/>
       </DockPanel>
     </Border>
 
-    <!-- Left nav -->
-    <Border Grid.Row="1" Grid.Column="0" Background="#0B1220" Padding="12">
-      <StackPanel Spacing="10">
-        <TextBlock Text="Навігація" Foreground="#9CA3AF" FontSize="12"/>
-        <Button Content="Дашборд" Command="{Binding GoDashboard}" />
-        <Button Content="Транзакції" Command="{Binding GoTransactions}" />
-        <Button Content="Імпорт" Command="{Binding GoImport}" />
-        <Button Content="Банки / API" Command="{Binding GoSources}" />
+    <Grid Grid.Row="1" ColumnDefinitions="300,*">
 
-        <Border Height="1" Background="#1F2937" Margin="0,8,0,8"/>
+      <!-- Left panel -->
+      <Border Grid.Column="0" Background="#0B1220" Padding="12">
+        <StackPanel Spacing="12">
+          <TextBlock Text="Період" Foreground="#9CA3AF" FontSize="12"/>
+          <ComboBox ItemsSource="{Binding PeriodPresets}"
+                    SelectedItem="{Binding SelectedPreset}"
+                    DisplayMemberBinding="{Binding Display}" />
 
-        <TextBlock Text="Період" Foreground="#9CA3AF" FontSize="12"/>
-        <ComboBox ItemsSource="{Binding PeriodPresets}"
-                  SelectedItem="{Binding SelectedPreset}"
-                  DisplayMemberBinding="{Binding Display}" />
-        <StackPanel Orientation="Horizontal" Spacing="8">
-          <DatePicker SelectedDate="{Binding FromDate}" Width="115"/>
-          <DatePicker SelectedDate="{Binding ToDate}" Width="115"/>
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <DatePicker SelectedDate="{Binding FromDate}" Width="140"/>
+            <DatePicker SelectedDate="{Binding ToDate}" Width="140"/>
+          </StackPanel>
+
+          <Button Content="Оновити" Command="{Binding RefreshCommand}" />
+
+          <Border Height="1" Background="#1F2937" Margin="0,8,0,8"/>
+
+          <TextBlock Text="Швидкі дії" Foreground="#9CA3AF" FontSize="12"/>
+          <Button Content="Імпорт CSV/XLSX…" Click="OnChooseImportClick"/>
+          <Button Content="Синхронізувати Monobank" Command="{Binding SyncMonobankCommand}" />
         </StackPanel>
-        <Button Content="Оновити дані" Command="{Binding RefreshAll}" />
-      </StackPanel>
-    </Border>
+      </Border>
 
-    <!-- Content -->
-    <ContentControl Grid.Row="1" Grid.Column="1" Content="{Binding CurrentPage}" />
+      <!-- Main content -->
+      <TabControl Grid.Column="1" Margin="12">
+        <TabItem Header="Дашборд">
+          <ScrollViewer>
+            <StackPanel Spacing="12" Margin="6">
+
+              <StackPanel Orientation="Horizontal" Spacing="12">
+                <Border Background="#111827" CornerRadius="12" Padding="14" Width="240">
+                  <StackPanel>
+                    <TextBlock Text="Доходи" Foreground="#9CA3AF"/>
+                    <TextBlock Text="{Binding Income}" FontSize="22" Foreground="White"/>
+                  </StackPanel>
+                </Border>
+                <Border Background="#111827" CornerRadius="12" Padding="14" Width="240">
+                  <StackPanel>
+                    <TextBlock Text="Витрати" Foreground="#9CA3AF"/>
+                    <TextBlock Text="{Binding Expense}" FontSize="22" Foreground="White"/>
+                  </StackPanel>
+                </Border>
+                <Border Background="#111827" CornerRadius="12" Padding="14" Width="240">
+                  <StackPanel>
+                    <TextBlock Text="Баланс" Foreground="#9CA3AF"/>
+                    <TextBlock Text="{Binding Net}" FontSize="22" Foreground="White"/>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Border Grid.Column="0" Background="#0B1220" CornerRadius="12" Padding="12">
+                  <StackPanel>
+                    <TextBlock Text="Витрати по категоріях (топ)" Foreground="#9CA3AF" Margin="0,0,0,6"/>
+                    <lvc:PieChart Series="{Binding PieSeries}" LegendPosition="Right" />
+                  </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Background="#0B1220" CornerRadius="12" Padding="12">
+                  <StackPanel>
+                    <TextBlock Text="Витрати по днях" Foreground="#9CA3AF" Margin="0,0,0,6"/>
+                    <lvc:CartesianChart Series="{Binding LineSeries}"
+                                       XAxes="{Binding XAxes}"
+                                       YAxes="{Binding YAxes}" />
+                  </StackPanel>
+                </Border>
+              </Grid>
+
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem Header="Імпорт">
+          <StackPanel Spacing="12" Margin="10">
+            <TextBlock Text="Перетягни сюди CSV/XLSX виписку" FontSize="16" FontWeight="SemiBold"/>
+            <Border Background="#0B1220" CornerRadius="12" Padding="18"
+                    AllowDrop="True"
+                    DragDrop.DragOver="OnDragOver"
+                    DragDrop.Drop="OnDrop">
+              <StackPanel Spacing="6">
+                <TextBlock Text="Drag & Drop файли сюди." Foreground="#D1D5DB"/>
+                <TextBlock Text="Підтримка: CSV, XLSX. Дедуплікація увімкнена." Foreground="#9CA3AF"/>
+              </StackPanel>
+            </Border>
+
+            <Border Background="#111827" CornerRadius="12" Padding="12">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Лог імпорту" Foreground="#9CA3AF"/>
+                <ItemsControl ItemsSource="{Binding ImportLog}" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+        </TabItem>
+
+        <TabItem Header="Банки / API">
+          <ScrollViewer>
+            <StackPanel Spacing="12" Margin="10">
+
+              <Border Background="#0B1220" CornerRadius="12" Padding="14">
+                <StackPanel Spacing="10">
+                  <TextBlock Text="Monobank" Foreground="#9CA3AF"/>
+                  <TextBlock Text="Введи X-Token і натисни «Зберегти»." Foreground="#D1D5DB"/>
+                  <TextBox Watermark="X-Token" Text="{Binding MonobankToken}" PasswordChar="●"/>
+                  <StackPanel Orientation="Horizontal" Spacing="10">
+                    <Button Content="Зберегти" Command="{Binding SaveSettingsCommand}" />
+                    <Button Content="Синхронізувати" Command="{Binding SyncMonobankCommand}" />
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <Border Background="#111827" CornerRadius="12" Padding="12">
+                <TextBlock Text="{Binding InfoText}" Foreground="#D1D5DB"/>
+              </Border>
+
+              <Border Background="#0B1220" CornerRadius="12" Padding="14">
+                <StackPanel Spacing="6">
+                  <TextBlock Text="Privat/UKRSIB" Foreground="#9CA3AF"/>
+                  <TextBlock Text="У цій збірці зроблено пріоритет на імпорт файлів (API підключається наступним кроком)." Foreground="#D1D5DB"/>
+                </StackPanel>
+              </Border>
+
+            </StackPanel>
+          </ScrollViewer>
+        </TabItem>
+
+        <TabItem Header="Транзакції">
+          <DataGrid ItemsSource="{Binding Transactions}" AutoGenerateColumns="False" GridLinesVisibility="None">
+            <DataGrid.Columns>
+              <DataGridTextColumn Header="Дата" Binding="{Binding DateLocal}" Width="170"/>
+              <DataGridTextColumn Header="Джерело" Binding="{Binding Source}" Width="110"/>
+              <DataGridTextColumn Header="Опис" Binding="{Binding Description}" Width="*"/>
+              <DataGridTextColumn Header="Merchant" Binding="{Binding Merchant}" Width="220"/>
+              <DataGridTextColumn Header="Сума" Binding="{Binding Amount}" Width="110"/>
+
+              <DataGridTemplateColumn Header="Категорія" Width="180">
+                <DataGridTemplateColumn.CellTemplate>
+                  <DataTemplate>
+                    <ComboBox ItemsSource="{Binding DataContext.Categories, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                              SelectedItem="{Binding Category}"
+                              SelectionChanged="OnCategoryChanged"/>
+                  </DataTemplate>
+                </DataGridTemplateColumn.CellTemplate>
+              </DataGridTemplateColumn>
+            </DataGrid.Columns>
+          </DataGrid>
+        </TabItem>
+
+      </TabControl>
+    </Grid>
   </Grid>
 </Window>
