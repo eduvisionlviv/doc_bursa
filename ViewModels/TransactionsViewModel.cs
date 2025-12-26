@@ -1,50 +1,82 @@
-using CommunityToolkit.Mvvm.ComponentModel;
-using FinDesk.Models;
-using FinDesk.Services;
 using System;
+using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
-using System.Threading.Tasks;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using FinDesk.Models;
+using FinDesk.Services;
 
-namespace FinDesk.ViewModels;
-
-public sealed partial class TransactionsViewModel : ViewModelBase
+namespace FinDesk.ViewModels
 {
-    private readonly Db _db;
-    private readonly CategorizationService _categorizer;
-    private readonly MainWindowViewModel _shell;
-
-    public ObservableCollection<Transaction> Items { get; } = new();
-    public ObservableCollection<MoneyCategory> Categories { get; } = new();
-
-    public TransactionsViewModel(Db db, CategorizationService categorizer, MainWindowViewModel shell)
+    public partial class TransactionsViewModel : ObservableObject
     {
-        _db = db;
-        _categorizer = categorizer;
-        _shell = shell;
+        private readonly DatabaseService _db;
+        private readonly CategorizationService _categorization;
 
-        foreach (var c in _categorizer.AllCategories())
-            Categories.Add(c);
-    }
+        [ObservableProperty]
+        private ObservableCollection<Transaction> transactions = new();
 
-    public async Task RefreshAsync(DateTime fromUtc, DateTime toUtc)
-    {
-        Items.Clear();
-        var txs = await _db.GetTransactionsAsync(fromUtc, toUtc);
-        foreach (var t in txs) Items.Add(t);
-    }
+        [ObservableProperty]
+        private Transaction? selectedTransaction;
 
-    public async Task ChangeCategoryAsync(Transaction t, MoneyCategory newCat)
-    {
-        if (t.Category == newCat) return;
+        [ObservableProperty]
+        private string searchText = string.Empty;
 
-        t.Category = newCat;
-        await _db.UpdateTransactionCategoryAsync(t.Id, newCat);
+        [ObservableProperty]
+        private string selectedCategory = "Всі";
 
-        var key = _categorizer.NormalizeMerchant(t.Merchant.Length > 0 ? t.Merchant : t.Description);
-        if (!string.IsNullOrWhiteSpace(key))
-            await _db.SaveMerchantCategoryAsync(key, newCat);
+        public List<string> Categories { get; } = new()
+        {
+            "Всі", "Продукти", "Транспорт", "Ресторани", "Здоров'я", "Розваги", "Дохід", "Інше"
+        };
 
-        await _shell.RefreshAll();
+        public TransactionsViewModel()
+        {
+            _db = new DatabaseService();
+            _categorization = new CategorizationService(_db);
+            LoadTransactions();
+        }
+
+        [RelayCommand]
+        private void LoadTransactions()
+        {
+            var allTransactions = _db.GetTransactions();
+
+            if (!string.IsNullOrEmpty(SearchText))
+            {
+                allTransactions = allTransactions
+                    .Where(t => t.Description.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+            }
+
+            if (SelectedCategory != "Всі")
+            {
+                allTransactions = allTransactions.Where(t => t.Category == SelectedCategory).ToList();
+            }
+
+            Transactions = new ObservableCollection<Transaction>(allTransactions);
+        }
+
+        [RelayCommand]
+        private void UpdateCategory(string category)
+        {
+            if (SelectedTransaction != null)
+            {
+                _db.UpdateTransactionCategory(SelectedTransaction.Id, category);
+                _categorization.LearnFromUserCorrection(SelectedTransaction.Description, category);
+                LoadTransactions();
+            }
+        }
+
+        partial void OnSearchTextChanged(string value)
+        {
+            LoadTransactions();
+        }
+
+        partial void OnSelectedCategoryChanged(string value)
+        {
+            LoadTransactions();
+        }
     }
 }
