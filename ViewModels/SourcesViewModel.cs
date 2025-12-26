@@ -1,116 +1,233 @@
-using CommunityToolkit.Mvvm.ComponentModel;
-using CommunityToolkit.Mvvm.Input;
-using FinDesk.Models;
-using FinDesk.Services;
 using System;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Windows;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
+using FinDesk.Models;
+using FinDesk.Services;
 
-namespace FinDesk.ViewModels;
-
-public sealed partial class SourcesViewModel : ViewModelBase
+namespace FinDesk.ViewModels
 {
-    private readonly AppSettings _settings;
-    private readonly Db _db;
-    private readonly CategorizationService _categorizer;
-    private readonly MonobankClient _mono;
-    private readonly PrivatAutoclientClient _privat;
-    private readonly UkrsibClientStub _ukrsib;
-    private readonly MainWindowViewModel _shell;
-
-    [ObservableProperty] private string monobankToken = "";
-    [ObservableProperty] private string privatToken = "";
-    [ObservableProperty] private string privatClientId = "";
-    [ObservableProperty] private string privatBaseUrl = "";
-    [ObservableProperty] private string ukrsibCertificatePath = "";
-
-    [ObservableProperty] private string infoText = "";
-
-    public SourcesViewModel(
-        AppSettings settings,
-        Db db,
-        CategorizationService categorizer,
-        MonobankClient mono,
-        PrivatAutoclientClient privat,
-        UkrsibClientStub ukrsib,
-        MainWindowViewModel shell)
+    public partial class SourcesViewModel : ObservableObject
     {
-        _settings = settings;
-        _db = db;
-        _categorizer = categorizer;
-        _mono = mono;
-        _privat = privat;
-        _ukrsib = ukrsib;
-        _shell = shell;
+        private readonly DatabaseService _db;
+        private readonly MonobankService _monobank;
+        private readonly PrivatBankService _privatbank;
+        private readonly UkrsibBankService _ukrsibbank;
+        private readonly FileImportService _fileImport;
+        private readonly CategorizationService _categorization;
 
-        MonobankToken = SettingsService.Unprotect(_settings.MonoTokenProtected);
-        PrivatToken = SettingsService.Unprotect(_settings.PrivatTokenProtected);
-        PrivatClientId = _settings.PrivatClientId ?? "";
-        PrivatBaseUrl = _settings.PrivatBaseUrl ?? "https://acp.privatbank.ua";
-        UkrsibCertificatePath = _settings.UkrsibCertificatePath ?? "";
+        [ObservableProperty]
+        private ObservableCollection<DataSource> dataSources = new();
 
-        InfoText = _ukrsib.IsAdvancedModeRequired
-            ? "UKRSIB Open Banking у продуктиві зазвичай потребує TPP-статусу та сертифікатів; для користувача рекомендовано імпорт CSV/XLSX."
-            : "";
-    }
+        [ObservableProperty]
+        private DataSource? selectedSource;
 
-    [RelayCommand]
-    private async Task SaveAsync()
-    {
-        _settings.MonoTokenProtected = SettingsService.Protect(MonobankToken);
-        _settings.PrivatTokenProtected = SettingsService.Protect(PrivatToken);
-        _settings.PrivatClientId = PrivatClientId;
-        _settings.PrivatBaseUrl = PrivatBaseUrl;
-        _settings.UkrsibCertificatePath = UkrsibCertificatePath;
+        [ObservableProperty]
+        private string monobankToken = string.Empty;
 
-        await SettingsService.SaveAsync(_settings);
-        await _shell.SetStatusAsync("Налаштування збережено");
-    }
+        [ObservableProperty]
+        private string privatbankClientId = string.Empty;
 
-    [RelayCommand]
-    private async Task SyncMonobankAsync()
-    {
-        if (string.IsNullOrWhiteSpace(MonobankToken))
+        [ObservableProperty]
+        private string privatbankSecret = string.Empty;
+
+        [ObservableProperty]
+        private string ukrsibbankToken = string.Empty;
+
+        [ObservableProperty]
+        private bool isSyncing;
+
+        public SourcesViewModel()
         {
-            InfoText = "Введи X-Token для Monobank.";
-            return;
+            _db = new DatabaseService();
+            _monobank = new MonobankService();
+            _privatbank = new PrivatBankService();
+            _ukrsibbank = new UkrsibBankService();
+            _fileImport = new FileImportService();
+            _categorization = new CategorizationService(_db);
+
+            LoadSources();
         }
 
-        var (fromUtc, toUtc) = _shell.GetPeriodUtc();
-        await _shell.SetStatusAsync("Monobank: отримання рахунків…");
-
-        var accounts = await _mono.GetAccountsAsync(MonobankToken);
-        if (accounts.Count == 0)
+        private void LoadSources()
         {
-            InfoText = "Monobank: рахунків не знайдено або токен не має доступу.";
-            return;
+            DataSources = new ObservableCollection<DataSource>(_db.GetDataSources());
+
+            if (!DataSources.Any(s => s.Name == "Monobank"))
+                DataSources.Add(new DataSource { Name = "Monobank", Type = "API" });
+            if (!DataSources.Any(s => s.Name == "PrivatBank"))
+                DataSources.Add(new DataSource { Name = "PrivatBank", Type = "API" });
+            if (!DataSources.Any(s => s.Name == "Ukrsibbank"))
+                DataSources.Add(new DataSource { Name = "Ukrsibbank", Type = "API" });
         }
 
-        var totalInserted = 0;
-        foreach (var (accountId, iban) in accounts.Take(3)) // keep UI fast; can expand later
+        [RelayCommand]
+        private async Task SyncMonobankAsync()
         {
-            foreach (var (chunkFrom, chunkTo) in _mono.ChunkBy31Days(fromUtc, toUtc))
+            if (string.IsNullOrEmpty(MonobankToken))
             {
-                await _shell.SetStatusAsync($"Monobank: виписка {chunkFrom:yyyy-MM-dd}…");
-                var txs = await _mono.GetStatementsAsync(
-                    MonobankToken, accountId, chunkFrom, chunkTo,
-                    accountLabel: string.IsNullOrWhiteSpace(iban) ? accountId : iban,
-                    categorizer: _categorizer);
+                MessageBox.Show("Введіть токен Monobank", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
-                totalInserted += await _db.UpsertTransactionsAsync(txs);
+            IsSyncing = true;
+            try
+            {
+                var from = DateTime.Now.AddMonths(-1);
+                var to = DateTime.Now;
+                var transactions = await _monobank.FetchTransactionsAsync(MonobankToken, from, to);
+
+                foreach (var t in transactions)
+                {
+                    t.Category = _categorization.CategorizeTransaction(t);
+                    _db.SaveTransaction(t);
+                }
+
+                var source = DataSources.FirstOrDefault(s => s.Name == "Monobank");
+                if (source != null)
+                {
+                    source.ApiToken = MonobankToken;
+                    source.IsEnabled = true;
+                    source.LastSync = DateTime.Now;
+                    _db.SaveDataSource(source);
+                }
+
+                MessageBox.Show($"Синхронізовано {transactions.Count} транзакцій", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Помилка: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsSyncing = false;
             }
         }
 
-        InfoText = $"Monobank: синхронізація завершена, додано {totalInserted} нових транзакцій.";
-        await _shell.RefreshAll();
-    }
+        [RelayCommand]
+        private async Task SyncPrivatBankAsync()
+        {
+            if (string.IsNullOrEmpty(PrivatbankClientId) || string.IsNullOrEmpty(PrivatbankSecret))
+            {
+                MessageBox.Show("Введіть дані авторизації PrivatBank або імпортуйте файл", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
 
-    [RelayCommand]
-    private async Task TestPrivatAsync()
-    {
-        var ok = await _privat.TestAsync(PrivatBaseUrl, PrivatToken, PrivatClientId);
-        InfoText = ok
-            ? "Privat API: з’єднання успішне (перевірка базового доступу)."
-            : "Privat API: не вдалося підключитись. Рекомендація: імпорт CSV/XLSX виписки.";
+            IsSyncing = true;
+            try
+            {
+                var from = DateTime.Now.AddMonths(-1);
+                var to = DateTime.Now;
+                var transactions = await _privatbank.FetchTransactionsAsync(PrivatbankClientId, PrivatbankSecret, from, to);
+
+                if (!transactions.Any())
+                {
+                    MessageBox.Show("API не вдалося отримати дані. Використайте імпорт файлу", "Увага", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                foreach (var t in transactions)
+                {
+                    t.Category = _categorization.CategorizeTransaction(t);
+                    _db.SaveTransaction(t);
+                }
+
+                var source = DataSources.FirstOrDefault(s => s.Name == "PrivatBank");
+                if (source != null)
+                {
+                    source.ClientId = PrivatbankClientId;
+                    source.ClientSecret = PrivatbankSecret;
+                    source.IsEnabled = true;
+                    source.LastSync = DateTime.Now;
+                    _db.SaveDataSource(source);
+                }
+
+                MessageBox.Show($"Синхронізовано {transactions.Count} транзакцій", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Помилка API: {ex.Message}. Використайте імпорт файлу", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsSyncing = false;
+            }
+        }
+
+        [RelayCommand]
+        private async Task SyncUkrsibbankAsync()
+        {
+            if (string.IsNullOrEmpty(UkrsibbankToken))
+            {
+                MessageBox.Show("Введіть токен Ukrsibbank або імпортуйте файл", "Помилка", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+
+            IsSyncing = true;
+            try
+            {
+                var from = DateTime.Now.AddMonths(-1);
+                var to = DateTime.Now;
+                var transactions = await _ukrsibbank.FetchTransactionsAsync(UkrsibbankToken, from, to);
+
+                if (!transactions.Any())
+                {
+                    MessageBox.Show("API не вдалося отримати дані. Використайте імпорт файлу", "Увага", MessageBoxButton.OK, MessageBoxImage.Warning);
+                    return;
+                }
+
+                foreach (var t in transactions)
+                {
+                    t.Category = _categorization.CategorizeTransaction(t);
+                    _db.SaveTransaction(t);
+                }
+
+                var source = DataSources.FirstOrDefault(s => s.Name == "Ukrsibbank");
+                if (source != null)
+                {
+                    source.ApiToken = UkrsibbankToken;
+                    source.IsEnabled = true;
+                    source.LastSync = DateTime.Now;
+                    _db.SaveDataSource(source);
+                }
+
+                MessageBox.Show($"Синхронізовано {transactions.Count} транзакцій", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Помилка API: {ex.Message}. Використайте імпорт файлу", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsSyncing = false;
+            }
+        }
+
+        [RelayCommand]
+        private void ImportFile(string bankName)
+        {
+            var dialog = new OpenFileDialog
+            {
+                Filter = "CSV файли (*.csv)|*.csv|Excel файли (*.xlsx)|*.xlsx",
+                Title = $"Імпорт виписки {bankName}"
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                var transactions = _fileImport.ImportFile(dialog.FileName, bankName);
+
+                foreach (var t in transactions)
+                {
+                    t.Category = _categorization.CategorizeTransaction(t);
+                    _db.SaveTransaction(t);
+                }
+
+                MessageBox.Show($"Імпортовано {transactions.Count} транзакцій", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+        }
     }
 }
