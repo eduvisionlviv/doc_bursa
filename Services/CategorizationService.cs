@@ -1,11 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using FinDesk.Models;
 using doc_bursa.Models;
-
-namespace FinDesk.Services
-{
+namespace doc_bursa.Services{
     public class CategorizationService
     {
         private readonly DatabaseService _db;
@@ -71,4 +68,5 @@ namespace FinDesk.Services
         }
     }
 }
+
 
