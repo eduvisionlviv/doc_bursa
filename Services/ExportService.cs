@@ -4,8 +4,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using doc_bursa.Models;
-namespace doc_bursa.Services{
+using FinDesk.Models;
+namespace FinDesk.Services
+{
     public class ExportService
     {
         // Експорт транзакцій у форматі CSV
@@ -36,8 +37,8 @@ namespace doc_bursa.Services{
         {
             try
             {
-                // TODO: Інтегрувати з бібліотекою EPPlus або ClosedXML для створення XLSX
-                // Поки що створюємо CSV файл з розширенням .xlsx (базова реалізація)
+                // TODO: Інтегрувати з бібліотекою EPPlus або ClosedXML
+                // Поки що створюємо CSV файл з розширенням .xlsx
                 var csv = new StringBuilder();
                 csv.AppendLine("Date\tDescription\tAmount\tCategory\tAccount\tBalance");
 
@@ -56,52 +57,25 @@ namespace doc_bursa.Services{
             }
         }
 
-        // Експорт звіту у форматі PDF
-        public async Task<bool> ExportToPdfAsync(IEnumerable<Transaction> transactions, string filePath, string title = "Transaction Report")
+        // Експорт транзакцій у форматі PDF
+        public async Task<bool> ExportToPdfAsync(IEnumerable<Transaction> transactions, string filePath)
         {
-            try
-            {
-                // TODO: Інтегрувати з бібліотекою iTextSharp або PdfSharp для створення PDF
-                // Поки що створюємо текстовий звіт
-                var report = new StringBuilder();
-                report.AppendLine(title);
-                report.AppendLine(new string('=', 80));
-                report.AppendLine($"Generated: {DateTime.Now:yyyy-MM-dd HH:mm}");
-                report.AppendLine(new string('-', 80));
-                report.AppendLine();
-
-                foreach (var t in transactions)
-                {
-                    report.AppendLine($"Date: {t.TransactionDate:yyyy-MM-dd}");
-                    report.AppendLine($"Description: {t.Description}");
-                    report.AppendLine($"Amount: {t.Amount:N2}");
-                    report.AppendLine($"Category: {t.Category}");
-                    report.AppendLine($"Account: {t.Account}");
-                    report.AppendLine($"Balance: {t.Balance:N2}");
-                    report.AppendLine(new string('-', 80));
-                }
-
-                await File.WriteAllTextAsync(filePath, report.ToString(), Encoding.UTF8);
-                return true;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"PDF Export Error: {ex.Message}");
-                return false;
-            }
+            // TODO: Реалізувати експорт у PDF
+            await Task.CompletedTask;
+            return false;
         }
 
-        // Експорт статистики по категоріях
-        public async Task<bool> ExportCategoryStatsToCsvAsync(Dictionary<string, decimal> stats, string filePath)
+        // Експорт статистики
+        public async Task<bool> ExportStatisticsAsync(Dictionary<string, decimal> statistics, string filePath)
         {
             try
             {
                 var csv = new StringBuilder();
-                csv.AppendLine("Category,Total Amount");
+                csv.AppendLine("Category,Amount");
 
-                foreach (var stat in stats.OrderByDescending(x => Math.Abs(x.Value)))
+                foreach (var stat in statistics)
                 {
-                    csv.AppendLine($"{EscapeCsv(stat.Key)},{stat.Value:N2}");
+                    csv.AppendLine($"{stat.Key},{stat.Value}");
                 }
 
                 await File.WriteAllTextAsync(filePath, csv.ToString(), Encoding.UTF8);
@@ -109,23 +83,58 @@ namespace doc_bursa.Services{
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"Category Stats Export Error: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Statistics Export Error: {ex.Message}");
                 return false;
             }
         }
 
-        // Допоміжна функція для екранування CSV полів
+        // Допоміжний метод для екранування CSV значень
         private string EscapeCsv(string value)
         {
             if (string.IsNullOrEmpty(value))
                 return string.Empty;
 
-            if (value.Contains(',') || value.Contains('"') || value.Contains('\n'))
+            if (value.Contains(",") || value.Contains("\"") || value.Contains("\n"))
             {
                 return $"\"{value.Replace("\"", "\"\"")}\"";
             }
 
             return value;
+        }
+
+        // Імпорт транзакцій з CSV
+        public async Task<List<Transaction>> ImportFromCsvAsync(string filePath)
+        {
+            var transactions = new List<Transaction>();
+
+            try
+            {
+                var lines = await File.ReadAllLinesAsync(filePath, Encoding.UTF8);
+                
+                // Пропускаємо заголовок
+                for (int i = 1; i < lines.Length; i++)
+                {
+                    var parts = lines[i].Split(',');
+                    if (parts.Length >= 6)
+                    {
+                        transactions.Add(new Transaction
+                        {
+                            TransactionDate = DateTime.Parse(parts[0]),
+                            Description = parts[1],
+                            Amount = decimal.Parse(parts[2]),
+                            Category = parts[3],
+                            Account = parts[4],
+                            Balance = decimal.Parse(parts[5])
+                        });
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"CSV Import Error: {ex.Message}");
+            }
+
+            return transactions;
         }
     }
 }
