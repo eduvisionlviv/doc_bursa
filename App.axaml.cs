@@ -1,33 +1,25 @@
-using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
-using Avalonia.Markup.Xaml;
-using System.Threading.Tasks;
+using System.IO;
+using System.Windows;
 
-namespace FinDesk;
-
-public partial class App : Application
+namespace FinDesk
 {
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
-
-    public override async void OnFrameworkInitializationCompleted()
+    public partial class App : Application
     {
-        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+        public static string AppDataPath { get; private set; } = string.Empty;
+
+        protected override void OnStartup(StartupEventArgs e)
         {
-            var settings = await SettingsService.LoadAsync();
-            var db = new Db(settings);
-            await db.InitAsync();
+            base.OnStartup(e);
 
-            var categorizer = new CategorizationService(db);
-            var analytics = new AnalyticsService(db);
-            var mono = new MonobankClient();
+            AppDataPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "FinDesk"
+            );
 
-            var vm = new MainWindowViewModel(settings, db, categorizer, analytics, mono);
-            desktop.MainWindow = new MainWindow { DataContext = vm };
-
-            await Task.Delay(50);
-            await vm.RefreshAsync();
+            if (!Directory.Exists(AppDataPath))
+            {
+                Directory.CreateDirectory(AppDataPath);
+            }
         }
-
-        base.OnFrameworkInitializationCompleted();
     }
 }
