@@ -7,6 +7,8 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using FinDesk.Models;
 using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
 
 namespace doc_bursa.ViewModels
 {
