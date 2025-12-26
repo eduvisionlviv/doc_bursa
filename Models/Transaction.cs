@@ -15,3 +15,4 @@ namespace FinDesk.Models
         public string Hash { get; set; } = string.Empty;
     }
 }
+
