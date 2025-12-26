@@ -276,7 +276,6 @@ namespace FinDesk.Services
             command.Parameters.AddWithValue("$id", id);
             command.ExecuteNonQuery();
         }
-    }
 
             // MasterGroup CRUD operations
         
