@@ -1,5 +1,5 @@
 using System;
-    sing System.Security.Cryptography;
+    using System.Security.Cryptography;
 using System.Text;
 
 namespace doc_bursa.Services
