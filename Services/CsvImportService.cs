@@ -4,7 +4,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using doc_bursa.Models;
-using doc_bursa.Models;
 
 namespace doc_bursa.Services
 {
