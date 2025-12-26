@@ -1,28 +1,42 @@
-name: Fix All Namespaces
+name: Fix namespaces (doc_bursa -> FinDesk)
 
 on:
   workflow_dispatch:
 
-  permissions:
+permissions:
   contents: write
 
 jobs:
-  fix-namespaces:
+  fix:
     runs-on: windows-latest
-    
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Run PowerShell script to fix namespaces
-      run: |
-        pwsh -File fix-namespaces.ps1
-      shell: pwsh
-    
-    - name: Commit changes
-      run: |
-        git config --local user.email "github-actions[bot]@users.noreply.github.com"
-        git config --local user.name "github-actions[bot]"
-        git add -A
-        git diff --staged --quiet || git commit -m "Fix all FinDesk namespaces to doc_bursa"
-        git push
-      shell: bash
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Replace namespaces/usings in all .cs files
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.cs
+          foreach ($f in $files) {
+            $text = Get-Content $f.FullName -Raw
+            $text2 = $text `
+              -replace 'namespace\s+doc_bursa', 'namespace FinDesk' `
+              -replace 'using\s+doc_bursa', 'using FinDesk'
+            if ($text2 -ne $text) {
+              Set-Content -Path $f.FullName -Value $text2 -Encoding utf8
+            }
+          }
+
+      - name: Commit & push changes
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Fix namespaces/usings to FinDesk"
+            git push
+          } else {
+            "No changes to commit."
+          }
