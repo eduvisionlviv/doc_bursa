@@ -1,6 +1,6 @@
 using System;
 
-namespace FinDesk.Models
+namespace doc_bursa.Models
 {
     public class Transaction
     {
@@ -15,4 +15,5 @@ namespace FinDesk.Models
         public string Hash { get; set; } = string.Empty;
     }
 }
+
 
