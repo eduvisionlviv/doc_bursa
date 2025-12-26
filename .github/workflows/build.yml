@@ -18,13 +18,13 @@ jobs:
         dotnet-version: '8.0.x'
     
     - name: Restore dependencies
-      run: dotnet restore FinDesk/FinDesk.csproj
+      run: dotnet restore FinDesk.csproj
     
     - name: Build
-      run: dotnet build FinDesk/FinDesk.csproj -c Release --no-restore
+      run: dotnet build FinDesk.csproj -c Release --no-restore
     
     - name: Publish
-      run: dotnet publish FinDesk/FinDesk.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish
+      run: dotnet publish FinDesk.csproj -c Release -r win-x64 --self-contained true /p:PublishSingleFile=true /p:IncludeNativeLibrariesForSelfExtract=true -o ./publish
     
     - name: Upload artifact
       uses: actions/upload-artifact@v4
