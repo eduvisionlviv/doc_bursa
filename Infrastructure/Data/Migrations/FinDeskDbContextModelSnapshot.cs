@@ -18,7 +18,7 @@ namespace FinDesk.Infrastructure.Data.Migrations
             modelBuilder
                 .HasAnnotation("ProductVersion", "8.0.5");
 
-            modelBuilder.Entity("doc_bursa.Models.Account", b =>
+            modelBuilder.Entity("FinDesk.Models.Account", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
@@ -58,7 +58,7 @@ namespace FinDesk.Infrastructure.Data.Migrations
                     b.ToTable("Accounts");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.AccountGroup", b =>
+            modelBuilder.Entity("FinDesk.Models.AccountGroup", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -93,7 +93,7 @@ namespace FinDesk.Infrastructure.Data.Migrations
                     b.ToTable("AccountGroups");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.Budget", b =>
+            modelBuilder.Entity("FinDesk.Models.Budget", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
@@ -144,7 +144,7 @@ namespace FinDesk.Infrastructure.Data.Migrations
                     b.ToTable("Budgets");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.Category", b =>
+            modelBuilder.Entity("FinDesk.Models.Category", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -165,7 +165,7 @@ namespace FinDesk.Infrastructure.Data.Migrations
                     b.ToTable("Categories");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.MasterGroup", b =>
+            modelBuilder.Entity("FinDesk.Models.MasterGroup", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -202,7 +202,7 @@ namespace FinDesk.Infrastructure.Data.Migrations
                     b.ToTable("MasterGroups");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.MasterGroupAccountGroup", b =>
+            modelBuilder.Entity("FinDesk.Models.MasterGroupAccountGroup", b =>
                 {
                     b.Property<int>("MasterGroupId")
                         .HasColumnType("INTEGER");
@@ -217,7 +217,7 @@ namespace FinDesk.Infrastructure.Data.Migrations
                     b.ToTable("MasterGroupAccountGroups");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.RecurringTransaction", b =>
+            modelBuilder.Entity("FinDesk.Models.RecurringTransaction", b =>
                 {
                     b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
@@ -285,7 +285,7 @@ namespace FinDesk.Infrastructure.Data.Migrations
                     b.ToTable("RecurringTransactions");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.Transaction", b =>
+            modelBuilder.Entity("FinDesk.Models.Transaction", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
@@ -340,15 +340,15 @@ namespace FinDesk.Infrastructure.Data.Migrations
                     b.ToTable("Transactions");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.MasterGroupAccountGroup", b =>
+            modelBuilder.Entity("FinDesk.Models.MasterGroupAccountGroup", b =>
                 {
-                    b.HasOne("doc_bursa.Models.AccountGroup", "AccountGroup")
+                    b.HasOne("FinDesk.Models.AccountGroup", "AccountGroup")
                         .WithMany("MasterGroupLinks")
                         .HasForeignKey("AccountGroupId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("doc_bursa.Models.MasterGroup", "MasterGroup")
+                    b.HasOne("FinDesk.Models.MasterGroup", "MasterGroup")
                         .WithMany("AccountGroupLinks")
                         .HasForeignKey("MasterGroupId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -359,26 +359,26 @@ namespace FinDesk.Infrastructure.Data.Migrations
                     b.Navigation("MasterGroup");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.RecurringTransaction", b =>
+            modelBuilder.Entity("FinDesk.Models.RecurringTransaction", b =>
                 {
-                    b.HasOne("doc_bursa.Models.Account", "Account")
+                    b.HasOne("FinDesk.Models.Account", "Account")
                         .WithMany("RecurringTransactions")
                         .HasForeignKey("AccountId");
 
                     b.Navigation("Account");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.Account", b =>
+            modelBuilder.Entity("FinDesk.Models.Account", b =>
                 {
                     b.Navigation("RecurringTransactions");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.AccountGroup", b =>
+            modelBuilder.Entity("FinDesk.Models.AccountGroup", b =>
                 {
                     b.Navigation("MasterGroupLinks");
                 });
 
-            modelBuilder.Entity("doc_bursa.Models.MasterGroup", b =>
+            modelBuilder.Entity("FinDesk.Models.MasterGroup", b =>
                 {
                     b.Navigation("AccountGroupLinks");
                 });

@@ -1,8 +1,8 @@
-<Application x:Class="doc_bursa.App"
+<Application x:Class="FinDesk.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="clr-namespace:doc_bursa"
-             xmlns:converters="clr-namespace:doc_bursa.Converters"
+             xmlns:local="clr-namespace:FinDesk"
+             xmlns:converters="clr-namespace:FinDesk.Converters"
              StartupUri="MainWindow.xaml">
     <Application.Resources>
         <ResourceDictionary>
