@@ -36,6 +36,11 @@
                        Command="{Binding NavigateCommand}"
                        CommandParameter="Sources"/>
 
+                <Button Content="Бюджети" 
+                       Style="{StaticResource NavButtonStyle}"
+                       Command="{Binding NavigateCommand}"
+                       CommandParameter="Budgets"/>
+
             <Button Content="Групи"
                     Style="{StaticResource NavButtonStyle}"
                     Command="{Binding NavigateCommand}"

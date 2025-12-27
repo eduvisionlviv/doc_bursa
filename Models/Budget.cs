@@ -33,7 +33,7 @@ namespace FinDesk.Models
         /// <summary>
         /// Поточна витрачена сума.
         /// </summary>
-        public decimal Spent { get; private set; }
+        public decimal Spent { get; set; }
 
         /// <summary>
         /// Період бюджету.
@@ -81,6 +81,31 @@ namespace FinDesk.Models
         /// Залишок бюджету.
         /// </summary>
         public decimal Remaining => Limit - Spent;
+
+        /// <summary>
+        /// Місячний ліміт бюджету (alias для Limit).
+        /// </summary>
+        public decimal MonthlyLimit
+        {
+            get => Limit;
+            set => Limit = value;
+        }
+
+        /// <summary>
+        /// Сумісність з періодом у вигляді рядка.
+        /// </summary>
+        public string Period
+        {
+            get => Frequency.ToString();
+            set
+            {
+                if (!string.IsNullOrWhiteSpace(value) &&
+                    Enum.TryParse<BudgetFrequency>(value, true, out var parsed))
+                {
+                    Frequency = parsed;
+                }
+            }
+        }
 
         /// <summary>
         /// Відсоток використання бюджету.

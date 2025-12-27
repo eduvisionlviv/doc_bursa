@@ -1,13 +1,12 @@
 using System;
 using FinDesk.Models;
-using NUnit.Framework;
+using Xunit;
 
 namespace FinDesk.Tests.Models
 {
-    [TestFixture]
     public class DomainModelsTests
     {
-        [Test]
+        [Fact]
         public void Account_ApplyTransaction_UpdatesBalanceAndTimestamp()
         {
             var account = new Account
@@ -19,12 +18,12 @@ namespace FinDesk.Tests.Models
             var beforeUpdate = account.UpdatedAt;
             account.ApplyTransaction(250m, new DateTime(2024, 12, 31, 12, 0, 0, DateTimeKind.Utc));
 
-            Assert.That(account.Balance, Is.EqualTo(250m));
-            Assert.That(account.UpdatedAt, Is.Not.EqualTo(beforeUpdate));
-            Assert.That(account.UpdatedAt, Is.EqualTo(new DateTime(2024, 12, 31, 12, 0, 0, DateTimeKind.Utc)));
+            Assert.Equal(250m, account.Balance);
+            Assert.NotEqual(beforeUpdate, account.UpdatedAt);
+            Assert.Equal(new DateTime(2024, 12, 31, 12, 0, 0, DateTimeKind.Utc), account.UpdatedAt);
         }
 
-        [Test]
+        [Fact]
         public void Budget_ShouldAlert_WhenThresholdExceeded()
         {
             var budget = new Budget
@@ -36,12 +35,12 @@ namespace FinDesk.Tests.Models
 
             budget.RegisterExpense(850m);
 
-            Assert.That(budget.Remaining, Is.EqualTo(150m));
-            Assert.That(budget.UsagePercentage, Is.EqualTo(85m));
-            Assert.That(budget.ShouldAlert, Is.True);
+            Assert.Equal(150m, budget.Remaining);
+            Assert.Equal(85m, budget.UsagePercentage);
+            Assert.True(budget.ShouldAlert);
         }
 
-        [Test]
+        [Fact]
         public void Budget_RegisterExpense_WithNegativeAmount_ShouldThrow()
         {
             var budget = new Budget
@@ -53,7 +52,7 @@ namespace FinDesk.Tests.Models
             Assert.Throws<ArgumentOutOfRangeException>(() => budget.RegisterExpense(-10m));
         }
 
-        [Test]
+        [Fact]
         public void Budget_ResetPeriod_ShouldZeroOutSpentAndUpdateDates()
         {
             var budget = new Budget
@@ -67,12 +66,12 @@ namespace FinDesk.Tests.Models
             budget.RegisterExpense(200m);
             budget.ResetPeriod(BudgetFrequency.Weekly, new DateTime(2025, 2, 1));
 
-            Assert.That(budget.Spent, Is.EqualTo(0m));
-            Assert.That(budget.Frequency, Is.EqualTo(BudgetFrequency.Weekly));
-            Assert.That(budget.StartDate, Is.EqualTo(new DateTime(2025, 2, 1)));
+            Assert.Equal(0m, budget.Spent);
+            Assert.Equal(BudgetFrequency.Weekly, budget.Frequency);
+            Assert.Equal(new DateTime(2025, 2, 1), budget.StartDate);
         }
 
-        [Test]
+        [Fact]
         public void Account_SetBalance_ShouldOverwriteBalanceAndStampUpdate()
         {
             var account = new Account
@@ -83,11 +82,11 @@ namespace FinDesk.Tests.Models
 
             account.SetBalance(1234.56m);
 
-            Assert.That(account.Balance, Is.EqualTo(1234.56m));
-            Assert.That(account.UpdatedAt, Is.Not.Null);
+            Assert.Equal(1234.56m, account.Balance);
+            Assert.NotNull(account.UpdatedAt);
         }
 
-        [Test]
+        [Fact]
         public void RecurringTransaction_CalculateNextOccurrence_RespectsFrequencyAndInterval()
         {
             var startDate = new DateTime(2025, 1, 1);
@@ -102,14 +101,14 @@ namespace FinDesk.Tests.Models
 
             recurring.CalculateNextOccurrence(startDate);
 
-            Assert.That(recurring.NextOccurrence, Is.EqualTo(startDate.AddDays(14)));
-            Assert.That(recurring.IsDue(startDate.AddDays(15)), Is.True);
+            Assert.Equal(startDate.AddDays(14), recurring.NextOccurrence);
+            Assert.True(recurring.IsDue(startDate.AddDays(15)));
 
             recurring.EndDate = startDate.AddDays(20);
             recurring.MarkAsExecuted(startDate.AddDays(15));
 
-            Assert.That(recurring.OccurrenceCount, Is.EqualTo(1));
-            Assert.That(recurring.IsActive, Is.False);
+            Assert.Equal(1, recurring.OccurrenceCount);
+            Assert.False(recurring.IsActive);
         }
     }
 }
