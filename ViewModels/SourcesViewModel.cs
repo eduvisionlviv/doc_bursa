@@ -355,4 +355,3 @@ namespace doc_bursa.ViewModels
         }
     }
 }
-
