@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using FinDesk.Models;
 using Microsoft.Data.Sqlite;
@@ -518,6 +519,11 @@ namespace FinDesk.Services
         }
 
         public Task AddDataSourceAsync(DataSource source) => Task.Run(() => AddDataSource(source));
+        public Task UpdateDataSourceAsync(DataSource source, CancellationToken cancellationToken = default)
+            => Task.Run(() => UpdateDataSource(source), cancellationToken);
+
+        public Task DeleteDataSourceAsync(int id, CancellationToken cancellationToken = default)
+            => Task.Run(() => DeleteDataSource(id), cancellationToken);
 
         /// <summary>
         /// Оновити існуюче джерело даних.
@@ -718,5 +724,14 @@ namespace FinDesk.Services
             command.Parameters.AddWithValue("$id", id);
             command.ExecuteNonQuery();
         }
+
+        public Task SaveMasterGroupAsync(MasterGroup group, CancellationToken cancellationToken = default)
+            => Task.Run(() => SaveMasterGroup(group), cancellationToken);
+
+        public Task<List<MasterGroup>> GetMasterGroupsAsync(CancellationToken cancellationToken = default)
+            => Task.Run(GetMasterGroups, cancellationToken);
+
+        public Task DeleteMasterGroupAsync(int id, CancellationToken cancellationToken = default)
+            => Task.Run(() => DeleteMasterGroup(id), cancellationToken);
     }
 }

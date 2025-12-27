@@ -124,20 +124,20 @@ namespace FinDesk.ViewModels
             IsLoading = true;
             try
             {
-                await Task.Run(() =>
+                var groups = await _databaseService.GetMasterGroupsAsync();
+
+                App.Current.Dispatcher.Invoke(() =>
                 {
-                    // Завантаження груп з бази даних
-                    // TODO: Реалізувати методи в DatabaseService для роботи з MasterGroup
-                    var groups = new List<MasterGroup>();
-                    
-                    App.Current.Dispatcher.Invoke(() =>
+                    Groups.Clear();
+                    foreach (var group in groups)
                     {
-                        Groups.Clear();
-                        foreach (var group in groups)
-                        {
-                            Groups.Add(group);
-                        }
-                    });
+                        Groups.Add(group);
+                    }
+
+                    if (Groups.Any())
+                    {
+                        SelectedGroup = Groups.First();
+                    }
                 });
             }
             catch (Exception ex)
@@ -183,23 +183,20 @@ namespace FinDesk.ViewModels
             IsLoading = true;
             try
             {
-                await Task.Run(() =>
+                var newGroup = new MasterGroup
                 {
-                    var newGroup = new MasterGroup
-                    {
-                        Name = NewGroupName,
-                        CreatedDate = DateTime.Now,
-                        IsActive = true
-                    };
+                    Name = NewGroupName,
+                    CreatedDate = DateTime.Now,
+                    IsActive = true
+                };
 
-                    // TODO: Зберегти в базу даних
-                    // _databaseService.SaveMasterGroup(newGroup);
+                await _databaseService.SaveMasterGroupAsync(newGroup);
 
-                    App.Current.Dispatcher.Invoke(() =>
-                    {
-                        Groups.Add(newGroup);
-                        NewGroupName = string.Empty;
-                    });
+                App.Current.Dispatcher.Invoke(() =>
+                {
+                    Groups.Add(newGroup);
+                    SelectedGroup = newGroup;
+                    NewGroupName = string.Empty;
                 });
             }
             catch (Exception ex)
@@ -221,16 +218,12 @@ namespace FinDesk.ViewModels
             try
             {
                 var groupToDelete = SelectedGroup;
-                await Task.Run(() =>
-                {
-                    // TODO: Видалити з бази даних
-                    // _databaseService.DeleteMasterGroup(groupToDelete.Id);
+                await _databaseService.DeleteMasterGroupAsync(groupToDelete.Id);
 
-                    App.Current.Dispatcher.Invoke(() =>
-                    {
-                        Groups.Remove(groupToDelete);
-                        SelectedGroup = null;
-                    });
+                App.Current.Dispatcher.Invoke(() =>
+                {
+                    Groups.Remove(groupToDelete);
+                    SelectedGroup = Groups.FirstOrDefault();
                 });
             }
             catch (Exception ex)
@@ -279,11 +272,7 @@ namespace FinDesk.ViewModels
             IsLoading = true;
             try
             {
-                await Task.Run(() =>
-                {
-                    // TODO: Оновити в базі даних
-                    // _databaseService.UpdateMasterGroup(SelectedGroup);
-                });
+                await _databaseService.SaveMasterGroupAsync(SelectedGroup);
             }
             catch (Exception ex)
             {
@@ -320,6 +309,7 @@ namespace FinDesk.ViewModels
                     {
                         SelectedGroup.TotalDebit = totalDebit;
                         SelectedGroup.TotalCredit = totalCredit;
+                        SelectedGroup.TotalBalance = totalDebit - totalCredit;
                     });
                 }
                 catch (Exception ex)

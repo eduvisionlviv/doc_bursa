@@ -113,24 +113,53 @@ namespace FinDesk.Models
         /// <summary>
         /// Загальна сума по всіх рахунках групи
         /// </summary>
+        private decimal _totalBalance;
         public decimal TotalBalance
         {
-            get
+            get => _totalBalance;
+            set
             {
-                // Буде обчислюватися через ViewModel на основі всіх рахунків
-                return 0;
+                if (_totalBalance != value)
+                {
+                    _totalBalance = value;
+                    OnPropertyChanged(nameof(TotalBalance));
+                }
             }
         }
 
         /// <summary>
         /// Загальний оборот по дебету
         /// </summary>
-        public decimal TotalDebit { get; set; }
+        private decimal _totalDebit;
+        public decimal TotalDebit
+        {
+            get => _totalDebit;
+            set
+            {
+                if (_totalDebit != value)
+                {
+                    _totalDebit = value;
+                    OnPropertyChanged(nameof(TotalDebit));
+                }
+            }
+        }
 
         /// <summary>
         /// Загальний оборот по кредиту
         /// </summary>
-        public decimal TotalCredit { get; set; }
+        private decimal _totalCredit;
+        public decimal TotalCredit
+        {
+            get => _totalCredit;
+            set
+            {
+                if (_totalCredit != value)
+                {
+                    _totalCredit = value;
+                    OnPropertyChanged(nameof(TotalCredit));
+                }
+            }
+        }
 
         public MasterGroup()
         {

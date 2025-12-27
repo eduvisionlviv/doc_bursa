@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
@@ -19,7 +20,7 @@ namespace FinDesk.Services
             _httpClient.DefaultRequestHeaders.Add("User-Agent", "FinDesk/1.0");
         }
 
-        public async Task<List<Transaction>> FetchTransactionsAsync(string token, DateTime from, DateTime to)
+        public async Task<ApiResult<List<Transaction>>> FetchTransactionsAsync(string token, DateTime from, DateTime to)
         {
             try
             {
@@ -30,10 +31,14 @@ namespace FinDesk.Services
                 var toUnix = ((DateTimeOffset)to).ToUnixTimeSeconds();
 
                 var response = await _httpClient.GetAsync($"https://api.monobank.ua/personal/statement/0/{fromUnix}/{toUnix}");
-                
+
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new Exception($"Monobank API error: {response.StatusCode}");
+                    var body = await response.Content.ReadAsStringAsync();
+                    return ApiResult<List<Transaction>>.FromError(
+                        $"Monobank API error: {(int)response.StatusCode} {response.StatusCode}. {body}",
+                        response.StatusCode,
+                        new List<Transaction>());
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
@@ -54,11 +59,19 @@ namespace FinDesk.Services
                     transactions.Add(transaction);
                 }
 
-                return transactions;
+                return ApiResult<List<Transaction>>.FromSuccess(transactions);
             }
-            catch
+            catch (HttpRequestException httpEx)
             {
-                return new List<Transaction>();
+                return ApiResult<List<Transaction>>.FromError($"Помилка мережі Monobank: {httpEx.Message}", null, new List<Transaction>());
+            }
+            catch (TaskCanceledException canceledEx)
+            {
+                return ApiResult<List<Transaction>>.FromError($"Таймаут Monobank: {canceledEx.Message}", null, new List<Transaction>());
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<List<Transaction>>.FromError($"Помилка Monobank: {ex.Message}", null, new List<Transaction>());
             }
         }
 
