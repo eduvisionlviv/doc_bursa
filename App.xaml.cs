@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Windows;
+using FinDesk.Services;
 using Serilog;
 using Serilog.Events;
 
@@ -9,6 +10,7 @@ namespace FinDesk
     public partial class App : Application
     {
         public static string AppDataPath { get; private set; } = string.Empty;
+        private DeduplicationBackgroundTask? _deduplicationBackgroundTask;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -26,10 +28,17 @@ namespace FinDesk
 
             ConfigureLogging();
             Log.Information("FinDesk application starting.");
+
+            // Запуск фонової дедуплікації
+            var db = new DatabaseService();
+            var dedup = new DeduplicationService(db);
+            var txService = new TransactionService(db, dedup);
+            _deduplicationBackgroundTask = new DeduplicationBackgroundTask(txService);
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
+            _deduplicationBackgroundTask?.Dispose();
             Log.Information("FinDesk application shutting down.");
             Log.CloseAndFlush();
             base.OnExit(e);

@@ -41,7 +41,9 @@ namespace FinDesk.Services
                     Source TEXT,
                     Account TEXT,
                     Balance REAL,
-                    Hash TEXT UNIQUE
+                    Hash TEXT UNIQUE,
+                    IsDuplicate INTEGER DEFAULT 0,
+                    OriginalTransactionId TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS DataSources (
@@ -103,6 +105,8 @@ namespace FinDesk.Services
 
             AddColumnIfMissing("Account", "TEXT");
             AddColumnIfMissing("Balance", "REAL");
+            AddColumnIfMissing("IsDuplicate", "INTEGER DEFAULT 0");
+            AddColumnIfMissing("OriginalTransactionId", "TEXT");
         }
 
         // Transactions
@@ -117,8 +121,8 @@ namespace FinDesk.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO Transactions 
-                (TransactionId, Date, Amount, Description, Category, Source, Account, Balance, Hash)
-                VALUES ($tid, $date, $amount, $desc, $cat, $src, $account, $balance, $hash)
+                (TransactionId, Date, Amount, Description, Category, Source, Account, Balance, Hash, IsDuplicate, OriginalTransactionId)
+                VALUES ($tid, $date, $amount, $desc, $cat, $src, $account, $balance, $hash, $isDuplicate, $originalTid)
             ";
 
             command.Parameters.AddWithValue("$tid", transaction.TransactionId);
@@ -130,6 +134,8 @@ namespace FinDesk.Services
             command.Parameters.AddWithValue("$account", transaction.Account ?? string.Empty);
             command.Parameters.AddWithValue("$balance", transaction.Balance);
             command.Parameters.AddWithValue("$hash", transaction.Hash ?? string.Empty);
+            command.Parameters.AddWithValue("$isDuplicate", transaction.IsDuplicate ? 1 : 0);
+            command.Parameters.AddWithValue("$originalTid", transaction.OriginalTransactionId ?? string.Empty);
             command.ExecuteNonQuery();
 
             _logger.Information("Transaction saved: {TransactionId}", transaction.TransactionId);
@@ -188,7 +194,7 @@ namespace FinDesk.Services
             }
 
             var whereClause = conditions.Any() ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
-            command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Account, Balance, Hash FROM Transactions {whereClause} ORDER BY Date DESC";
+            command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Account, Balance, Hash, IsDuplicate, OriginalTransactionId FROM Transactions {whereClause} ORDER BY Date DESC";
 
             var transactions = new List<Transaction>();
             using var reader = command.ExecuteReader();
@@ -205,7 +211,9 @@ namespace FinDesk.Services
                     Source = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
                     Account = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
                     Balance = reader.IsDBNull(8) ? 0 : (decimal)reader.GetDouble(8),
-                    Hash = reader.IsDBNull(9) ? string.Empty : reader.GetString(9)
+                    Hash = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+                    IsDuplicate = !reader.IsDBNull(10) && reader.GetInt32(10) == 1,
+                    OriginalTransactionId = reader.IsDBNull(11) ? string.Empty : reader.GetString(11)
                 };
 
                 transactions.Add(transaction);
@@ -247,6 +255,60 @@ namespace FinDesk.Services
 
             var command = connection.CreateCommand();
             command.CommandText = "DELETE FROM Transactions WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
+        }
+
+        /// <summary>
+        /// Отримати транзакцію за її TransactionId.
+        /// </summary>
+        public Transaction? GetTransactionByTransactionId(string transactionId)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Account, Balance, Hash, IsDuplicate, OriginalTransactionId 
+                                    FROM Transactions WHERE TransactionId = $tid LIMIT 1";
+            command.Parameters.AddWithValue("$tid", transactionId);
+
+            using var reader = command.ExecuteReader();
+            if (reader.Read())
+            {
+                return new Transaction
+                {
+                    Id = reader.GetInt32(0),
+                    TransactionId = reader.GetString(1),
+                    Date = DateTime.Parse(reader.GetString(2)),
+                    Amount = (decimal)reader.GetDouble(3),
+                    Description = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                    Category = reader.IsDBNull(5) ? "Інше" : reader.GetString(5),
+                    Source = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
+                    Account = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+                    Balance = reader.IsDBNull(8) ? 0 : (decimal)reader.GetDouble(8),
+                    Hash = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
+                    IsDuplicate = !reader.IsDBNull(10) && reader.GetInt32(10) == 1,
+                    OriginalTransactionId = reader.IsDBNull(11) ? string.Empty : reader.GetString(11)
+                };
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Оновити дублікатну інформацію транзакції.
+        /// </summary>
+        public void UpdateDuplicateInfo(int id, bool isDuplicate, string? originalTransactionId)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"UPDATE Transactions 
+                                    SET IsDuplicate = $isDuplicate, OriginalTransactionId = $originalTid 
+                                    WHERE Id = $id";
+            command.Parameters.AddWithValue("$isDuplicate", isDuplicate ? 1 : 0);
+            command.Parameters.AddWithValue("$originalTid", originalTransactionId ?? string.Empty);
             command.Parameters.AddWithValue("$id", id);
             command.ExecuteNonQuery();
         }

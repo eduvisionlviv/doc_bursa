@@ -49,5 +49,16 @@ namespace FinDesk.Models
 
         [MaxLength(128)]
         public string Hash { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Позначка про те, що транзакція є дублікатом іншої.
+        /// </summary>
+        public bool IsDuplicate { get; set; }
+
+        /// <summary>
+        /// Ідентифікатор оригінальної транзакції (TransactionId), якщо поточна є дублікатом.
+        /// </summary>
+        [MaxLength(128)]
+        public string OriginalTransactionId { get; set; } = string.Empty;
     }
 }

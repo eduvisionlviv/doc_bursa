@@ -105,8 +105,11 @@ namespace FinDesk.Services
         // Імпорт транзакцій з CSV
         public Task<List<Transaction>> ImportFromCsvAsync(string filePath)
         {
-            var service = new CsvImportService(new DatabaseService(), new CategorizationService(new DatabaseService()));
-            var result = service.ImportFromCsv(filePath);
+            var db = new DatabaseService();
+            var dedup = new DeduplicationService(db);
+            var txService = new TransactionService(db, dedup);
+            var service = new CsvImportService(db, new CategorizationService(db), txService);
+            service.ImportFromCsv(filePath);
             return Task.FromResult(new List<Transaction>()); // keeping signature but functionality moved to CsvImportService
         }
     }

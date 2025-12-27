@@ -1,14 +1,13 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using FinDesk.Models;
 using FinDesk.Services;
 using Microsoft.Win32;
-using System.Threading.Tasks;
-using FinDesk.Models;
-using FinDesk.Services;
 
 namespace FinDesk.ViewModels
 {
@@ -17,6 +16,7 @@ namespace FinDesk.ViewModels
         private readonly DatabaseService _db;
         private readonly CsvImportService _csvImport;
         private readonly CategorizationService _categorization;
+        private readonly TransactionService _transactionService;
 
         [ObservableProperty]
         private ObservableCollection<DataSource> sources = new();
@@ -48,7 +48,9 @@ namespace FinDesk.ViewModels
         {
             _db = new DatabaseService();
             _categorization = new CategorizationService(_db);
-            _csvImport = new CsvImportService(_db, _categorization);
+            var deduplicationService = new DeduplicationService(_db);
+            _transactionService = new TransactionService(_db, deduplicationService);
+            _csvImport = new CsvImportService(_db, _categorization, _transactionService);
             LoadSources();
         }
 

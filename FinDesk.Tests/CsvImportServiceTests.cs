@@ -1,5 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using FinDesk.Services;
 using Xunit;
 
@@ -63,13 +65,40 @@ namespace FinDesk.Tests
         [Fact]
         public void HandlesMultipleEncodings()
         {
+            var temp = CreateIsolatedAppData();
             var tmp = Path.GetTempFileName();
             File.WriteAllText(tmp, "Дата;Опис;Сума\n01.01.2024;Тест;-10", System.Text.Encoding.GetEncoding(1251));
 
-            var service = new CsvImportService(new Services.DatabaseService(), new CategorizationService(new Services.DatabaseService()));
+            var db = new DatabaseService();
+            var dedup = new DeduplicationService(db);
+            var tx = new TransactionService(db, dedup);
+            var service = new CsvImportService(db, new CategorizationService(db), tx);
             var result = service.ImportFromCsv(tmp, "Universal");
 
             Assert.True(result.Imported + result.Skipped >= 0); // basic smoke test
+            Cleanup(temp);
+        }
+
+        private static string CreateIsolatedAppData()
+        {
+            var temp = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(temp);
+            SetAppDataPath(temp);
+            return temp;
+        }
+
+        private static void Cleanup(string? path)
+        {
+            if (!string.IsNullOrEmpty(path) && Directory.Exists(path))
+            {
+                Directory.Delete(path, recursive: true);
+            }
+        }
+
+        private static void SetAppDataPath(string path)
+        {
+            var property = typeof(App).GetProperty("AppDataPath", BindingFlags.Static | BindingFlags.Public);
+            property!.SetValue(null, path);
         }
     }
 }
