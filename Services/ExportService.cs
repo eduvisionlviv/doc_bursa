@@ -118,8 +118,12 @@ namespace FinDesk.Services
                     for (var colIndex = 0; colIndex < columns.Count; colIndex++)
                     {
                         reportRow.Columns.TryGetValue(columns[colIndex], out var value);
+                        
+                        // Використовуємо типізований метод нормалізації
                         var cellValue = NormalizeCellValue(value);
-                        worksheet.Cell(rowIndex + 2, colIndex + 1).SetValue(cellValue);
+                        
+                        // ClosedXML v0.100+ вимагає присвоєння через властивість Value (типу XLCellValue)
+                        worksheet.Cell(rowIndex + 2, colIndex + 1).Value = cellValue;
                     }
                 }
 
@@ -234,15 +238,20 @@ namespace FinDesk.Services
             return rows.Where(r => filters.All(f => r.Columns.TryGetValue(f.Key, out var value) && string.Equals(value?.ToString(), f.Value, StringComparison.OrdinalIgnoreCase)));
         }
 
-        private static object NormalizeCellValue(object? value)
+        // ВИПРАВЛЕНО: Повертаємо XLCellValue замість object для сумісності з ClosedXML
+        private static XLCellValue NormalizeCellValue(object? value)
         {
+            if (value == null) return Blank.Value;
+
             return value switch
             {
-                null => string.Empty,
                 DateTime dateTime => dateTime,
                 DateTimeOffset dateTimeOffset => dateTimeOffset.DateTime,
-                decimal decimalValue => Convert.ToDouble(decimalValue),
-                double or float or int or long or short or byte => value,
+                decimal decimalValue => decimalValue,
+                double doubleValue => doubleValue,
+                float floatValue => floatValue,
+                int intValue => intValue,
+                long longValue => longValue, // ClosedXML має неявне перетворення
                 string text => text,
                 bool boolean => boolean,
                 _ => value.ToString() ?? string.Empty
@@ -257,7 +266,7 @@ namespace FinDesk.Services
             var txService = new TransactionService(db, dedup);
             var service = new CsvImportService(db, new CategorizationService(db), txService);
             await service.ImportFromCsvAsync(filePath, cancellationToken: cancellationToken);
-            return new List<Transaction>(); // keeping signature but functionality moved to CsvImportService
+            return new List<Transaction>(); 
         }
     }
 }
