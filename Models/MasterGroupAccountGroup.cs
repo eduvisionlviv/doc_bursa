@@ -1,4 +1,4 @@
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     /// <summary>
     /// Проміжна сутність для зв'язку MasterGroup ↔ AccountGroup з композитним ключем.
@@ -12,3 +12,4 @@ namespace doc_bursa.Models
         public AccountGroup AccountGroup { get; set; } = null!;
     }
 }
+

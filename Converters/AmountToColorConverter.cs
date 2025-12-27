@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows.Data;
 using System.Windows.Media;
 
-namespace doc_bursa.Converters
+namespace FinDesk.Converters
 {
     public class AmountToColorConverter : IValueConverter
     {
@@ -25,3 +25,4 @@ namespace doc_bursa.Converters
         }
     }
 }
+

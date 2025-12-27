@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     /// <summary>
     /// Описує періодичність рекурентних транзакцій.
@@ -15,3 +15,4 @@ namespace doc_bursa.Models
         Yearly
     }
 }
+

@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     /// <summary>
     /// Модель бюджету для контролю витрат та прибутків.
@@ -149,3 +149,4 @@ namespace doc_bursa.Models
         }
     }
 }
+

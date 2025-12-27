@@ -1,10 +1,10 @@
 using System.IO;
-using doc_bursa.Models;
+using FinDesk.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Serilog.Extensions.Logging;
 
-namespace doc_bursa.Infrastructure.Data
+namespace FinDesk.Infrastructure.Data
 {
     /// <summary>
     /// EF Core контекст додатку FinDesk.
@@ -138,3 +138,4 @@ namespace doc_bursa.Infrastructure.Data
         }
     }
 }
+

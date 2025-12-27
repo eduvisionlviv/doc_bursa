@@ -1,11 +1,11 @@
 using System;
 using System.IO;
 using System.Windows;
-using doc_bursa.Services;
+using FinDesk.Services;
 using Serilog;
 using Serilog.Events;
 
-namespace doc_bursa
+namespace FinDesk
 {
     public partial class App : Application
     {
@@ -62,3 +62,4 @@ namespace doc_bursa
         }
     }
 }
+

@@ -5,15 +5,15 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using doc_bursa.Models;
-using doc_bursa.Services;
+using FinDesk.Models;
+using FinDesk.Services;
 using LiveChartsCore;
 using LiveChartsCore.Measure;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
 
-namespace doc_bursa.ViewModels
+namespace FinDesk.ViewModels
 {
     public class AnalyticsViewModel : ViewModelBase
     {
@@ -245,3 +245,4 @@ namespace doc_bursa.ViewModels
         }
     }
 }
+

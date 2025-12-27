@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using System.Windows.Data;
 
-namespace doc_bursa.Converters
+namespace FinDesk.Converters
 {
     /// <summary>
     /// Конвертер для перевірки чи значення більше нуля
@@ -33,3 +33,4 @@ namespace doc_bursa.Converters
         }
     }
 }
+

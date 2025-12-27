@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using doc_bursa.Models;
+using FinDesk.Models;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     /// <summary>
     /// Калькуляції витрат по категоріях та періодах.
@@ -233,3 +233,4 @@ namespace doc_bursa.Services
         }
     }
 }
+

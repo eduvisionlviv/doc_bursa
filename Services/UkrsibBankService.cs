@@ -7,12 +7,12 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using doc_bursa.Models;
+using FinDesk.Models;
 using Polly;
 using Polly.Extensions.Http;
 using Polly.Timeout;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     public class UkrsibBankService
     {
@@ -114,3 +114,4 @@ namespace doc_bursa.Services
         }
     }
 }
+

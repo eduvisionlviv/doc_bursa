@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using doc_bursa.Models;
+using FinDesk.Models;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     /// <summary>
     /// Шаблонний генератор звітів із підтримкою багатосторінковості та простих графіків.
@@ -90,3 +90,4 @@ namespace doc_bursa.Services
         }
     }
 }
+

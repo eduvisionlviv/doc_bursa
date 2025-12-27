@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     /// <summary>
     /// Типи звітів, що підтримуються системою.
@@ -135,3 +135,4 @@ namespace doc_bursa.Models
         public List<ChartData> Charts { get; } = new();
     }
 }
+

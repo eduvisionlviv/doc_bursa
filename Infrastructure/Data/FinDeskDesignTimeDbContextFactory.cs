@@ -3,7 +3,7 @@ using System.IO;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 
-namespace doc_bursa.Infrastructure.Data
+namespace FinDesk.Infrastructure.Data
 {
     public class FinDeskDesignTimeDbContextFactory : IDesignTimeDbContextFactory<FinDeskDbContext>
     {
@@ -23,3 +23,4 @@ namespace doc_bursa.Infrastructure.Data
         }
     }
 }
+

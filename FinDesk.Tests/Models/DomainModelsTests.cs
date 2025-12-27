@@ -1,8 +1,8 @@
 using System;
-using doc_bursa.Models;
+using FinDesk.Models;
 using Xunit;
 
-namespace doc_bursa.Tests.Models
+namespace FinDesk.Tests.Models
 {
     public class DomainModelsTests
     {
@@ -112,3 +112,4 @@ namespace doc_bursa.Tests.Models
         }
     }
 }
+

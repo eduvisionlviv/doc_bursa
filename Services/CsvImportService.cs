@@ -6,11 +6,11 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using doc_bursa.Models;
+using FinDesk.Models;
 using FluentValidation;
 using Serilog;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     public class CsvImportService
     {
@@ -562,3 +562,4 @@ namespace doc_bursa.Services
         public MappedCsvRow? Map(Dictionary<string, string> row) => _mapper(row);
     }
 }
+

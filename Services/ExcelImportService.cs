@@ -5,11 +5,11 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using doc_bursa.Models;
+using FinDesk.Models;
 using OfficeOpenXml;
 using Serilog;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     public class ExcelImportService
     {
@@ -154,3 +154,4 @@ namespace doc_bursa.Services
         }
     }
 }
+

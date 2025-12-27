@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     /// <summary>
     /// Модель періодичних (рекурентних) транзакцій.
@@ -158,3 +158,4 @@ namespace doc_bursa.Models
         }
     }
 }
+

@@ -1,6 +1,6 @@
 using System;
 
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     /// <summary>
     /// Результат аналізу бюджету з метриками використання.
@@ -50,3 +50,4 @@ namespace doc_bursa.Models
         public decimal UsagePercentage { get; set; }
     }
 }
+

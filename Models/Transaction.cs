@@ -1,7 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     /// <summary>
     /// Фінансова транзакція у системі.
@@ -62,3 +62,4 @@ namespace doc_bursa.Models
         public string OriginalTransactionId { get; set; } = string.Empty;
     }
 }
+

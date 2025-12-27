@@ -1,7 +1,7 @@
 using System.Windows.Controls;
-using doc_bursa.ViewModels;
+using FinDesk.ViewModels;
 
-namespace doc_bursa.Views
+namespace FinDesk.Views
 {
     public partial class TransactionsView : UserControl
     {
@@ -12,3 +12,4 @@ namespace doc_bursa.Views
         }
     }
 }
+

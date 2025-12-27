@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using doc_bursa.Models;
+using FinDesk.Models;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     /// <summary>
     /// Сервіс роботи з транзакціями з інтегрованою дедуплікацією.
@@ -81,3 +81,4 @@ namespace doc_bursa.Services
         }
     }
 }
+

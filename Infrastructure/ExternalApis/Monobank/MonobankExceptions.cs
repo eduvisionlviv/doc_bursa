@@ -1,7 +1,7 @@
 using System;
 using System.Net;
 
-namespace doc_bursa.Infrastructure.ExternalApis.Monobank
+namespace FinDesk.Infrastructure.ExternalApis.Monobank
 {
     public class MonobankApiException : Exception
     {
@@ -30,3 +30,4 @@ namespace doc_bursa.Infrastructure.ExternalApis.Monobank
         }
     }
 }
+

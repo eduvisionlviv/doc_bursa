@@ -4,11 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using doc_bursa.Models;
+using FinDesk.Models;
 using Microsoft.Data.Sqlite;
 using Serilog;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     /// <summary>
     /// Робота з локальною SQLite базою даних.
@@ -788,3 +788,4 @@ namespace doc_bursa.Services
             => Task.Run(() => DeleteMasterGroup(id), cancellationToken);
     }
 }
+

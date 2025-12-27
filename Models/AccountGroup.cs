@@ -4,7 +4,7 @@ using System.Linq;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     /// <summary>
     /// Група рахунків для об'єднання та аналізу
@@ -97,3 +97,4 @@ namespace doc_bursa.Models
         }
     }
 }
+

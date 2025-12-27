@@ -6,9 +6,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
-using doc_bursa.Models;
+using FinDesk.Models;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     public class ExportService
     {
@@ -245,3 +245,4 @@ namespace doc_bursa.Services
         }
     }
 }
+

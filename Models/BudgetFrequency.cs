@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     /// <summary>
     /// Частота бюджетного періоду.
@@ -14,3 +14,4 @@ namespace doc_bursa.Models
         Weekly
     }
 }
+

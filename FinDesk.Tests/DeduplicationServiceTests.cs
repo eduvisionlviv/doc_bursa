@@ -3,11 +3,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using doc_bursa.Models;
-using doc_bursa.Services;
+using FinDesk.Models;
+using FinDesk.Services;
 using Xunit;
 
-namespace doc_bursa.Tests
+namespace FinDesk.Tests
 {
     public class DeduplicationServiceTests
     {
@@ -236,3 +236,4 @@ namespace doc_bursa.Tests
         }
     }
 }
+

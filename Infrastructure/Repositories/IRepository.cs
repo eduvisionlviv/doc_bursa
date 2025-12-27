@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace doc_bursa.Infrastructure.Repositories
+namespace FinDesk.Infrastructure.Repositories
 {
     public interface IRepository<TEntity> where TEntity : class
     {
@@ -13,3 +13,4 @@ namespace doc_bursa.Infrastructure.Repositories
         Task<int> SaveChangesAsync();
     }
 }
+

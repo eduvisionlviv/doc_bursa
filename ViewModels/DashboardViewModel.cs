@@ -4,14 +4,14 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using doc_bursa.Models;
-using doc_bursa.Services;
+using FinDesk.Models;
+using FinDesk.Services;
 using LiveChartsCore;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
 
-namespace doc_bursa.ViewModels
+namespace FinDesk.ViewModels
 {
     public partial class DashboardViewModel : ObservableObject
     {
@@ -144,3 +144,4 @@ namespace doc_bursa.ViewModels
         }
     }
 }
+

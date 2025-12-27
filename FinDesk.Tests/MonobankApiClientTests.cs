@@ -4,14 +4,14 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Threading.Tasks;
-using doc_bursa.Infrastructure.ExternalApis.Monobank;
+using FinDesk.Infrastructure.ExternalApis.Monobank;
 using RichardSzalay.MockHttp;
 using Serilog;
 using Serilog.Core;
 using Serilog.Events;
 using Xunit;
 
-namespace doc_bursa.Tests
+namespace FinDesk.Tests
 {
     public class MonobankApiClientTests
     {
@@ -164,3 +164,4 @@ namespace doc_bursa.Tests
         }
     }
 }
+

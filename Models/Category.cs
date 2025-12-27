@@ -1,4 +1,4 @@
-namespace doc_bursa.Models
+namespace FinDesk.Models
 {
     public class Category
     {
@@ -8,3 +8,4 @@ namespace doc_bursa.Models
         public int Count { get; set; }
     }
 }
+

@@ -1,7 +1,7 @@
-using doc_bursa.Infrastructure.Data;
-using doc_bursa.Models;
+using FinDesk.Infrastructure.Data;
+using FinDesk.Models;
 
-namespace doc_bursa.Infrastructure.Repositories
+namespace FinDesk.Infrastructure.Repositories
 {
     public class RecurringTransactionRepository : Repository<RecurringTransaction>
     {
@@ -10,3 +10,4 @@ namespace doc_bursa.Infrastructure.Repositories
         }
     }
 }
+

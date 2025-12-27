@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     public class ImportLogService
     {
@@ -66,3 +66,4 @@ namespace doc_bursa.Services
         }
     }
 }
+

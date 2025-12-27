@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
-namespace doc_bursa.Infrastructure.ExternalApis.Monobank
+namespace FinDesk.Infrastructure.ExternalApis.Monobank
 {
     public class MonobankUserInfoDto
     {
@@ -121,3 +121,4 @@ namespace doc_bursa.Infrastructure.ExternalApis.Monobank
         public decimal? RateCross { get; set; }
     }
 }
+

@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     public record ApiResult<T>(bool Success, T Data, string? ErrorMessage = null, HttpStatusCode? StatusCode = null)
     {
@@ -10,3 +10,4 @@ namespace doc_bursa.Services
             => new(false, data!, message, status);
     }
 }
+

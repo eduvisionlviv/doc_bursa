@@ -1,7 +1,7 @@
 using System;
-using doc_bursa.Models;
+using FinDesk.Models;
 
-namespace doc_bursa.Infrastructure.ExternalApis.Monobank
+namespace FinDesk.Infrastructure.ExternalApis.Monobank
 {
     public static class MonobankTransactionMapper
     {
@@ -37,3 +37,4 @@ namespace doc_bursa.Infrastructure.ExternalApis.Monobank
         }
     }
 }
+

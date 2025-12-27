@@ -1,9 +1,9 @@
 using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using doc_bursa.Views;
+using FinDesk.Views;
 
-namespace doc_bursa.ViewModels
+namespace FinDesk.ViewModels
 {
     public partial class MainViewModel : ObservableObject
     {
@@ -48,3 +48,4 @@ namespace doc_bursa.ViewModels
         }
     }
 }
+

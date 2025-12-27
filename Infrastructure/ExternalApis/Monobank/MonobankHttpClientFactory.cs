@@ -5,7 +5,7 @@ using System.Net.Http.Headers;
 using Polly;
 using Polly.Extensions.Http;
 
-namespace doc_bursa.Infrastructure.ExternalApis.Monobank
+namespace FinDesk.Infrastructure.ExternalApis.Monobank
 {
     public static class MonobankHttpClientFactory
     {
@@ -46,3 +46,4 @@ namespace doc_bursa.Infrastructure.ExternalApis.Monobank
         }
     }
 }
+

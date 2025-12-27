@@ -3,9 +3,9 @@ using System.Net.Http;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using doc_bursa.Models;
+using FinDesk.Models;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     /// <summary>
     /// Сервіс для валідації та тестування API токенів банків
@@ -185,3 +185,4 @@ namespace doc_bursa.Services
         }
     }
 }
+

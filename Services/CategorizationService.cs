@@ -2,11 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
-using doc_bursa.Models;
+using FinDesk.Models;
 using Microsoft.ML;
 using Microsoft.ML.Data;
 
-namespace doc_bursa.Services
+namespace FinDesk.Services
 {
     /// <summary>
     /// Гібридна категоризація транзакцій: спершу regex-правила, далі ML.NET text classification.
@@ -259,5 +259,6 @@ namespace doc_bursa.Services
         }
     }
 }
+
 
 

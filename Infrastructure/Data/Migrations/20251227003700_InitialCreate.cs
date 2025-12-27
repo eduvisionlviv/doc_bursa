@@ -3,7 +3,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
-namespace doc_bursa.Infrastructure.Data.Migrations
+namespace FinDesk.Infrastructure.Data.Migrations
 {
     /// <inheritdoc />
     public partial class InitialCreate : Migration
@@ -233,3 +233,4 @@ namespace doc_bursa.Infrastructure.Data.Migrations
         }
     }
 }
+

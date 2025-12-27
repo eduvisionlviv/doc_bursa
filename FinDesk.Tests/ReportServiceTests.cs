@@ -4,11 +4,11 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using doc_bursa.Models;
-using doc_bursa.Services;
+using FinDesk.Models;
+using FinDesk.Services;
 using Xunit;
 
-namespace doc_bursa.Tests
+namespace FinDesk.Tests
 {
     public class ReportServiceTests : IDisposable
     {
@@ -204,3 +204,4 @@ namespace doc_bursa.Tests
         }
     }
 }
+
