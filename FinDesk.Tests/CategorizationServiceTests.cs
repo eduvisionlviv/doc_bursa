@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading.Tasks;
 using FinDesk.Models;
 using FinDesk.Services;
 using Xunit;
@@ -152,6 +153,68 @@ namespace FinDesk.Tests
             }
         }
 
+        [Fact]
+        public void PersistsAndLoadsModelFromDisk()
+        {
+            var temp = CreateIsolatedAppData();
+            try
+            {
+                var db = new DatabaseService();
+                AddTransactions(db, "Streaming service", "Розваги", 50, -299);
+
+                var service = new CategorizationService(db);
+                var modelPath = Path.Combine(temp, "categorization-model.zip");
+                Assert.True(File.Exists(modelPath));
+                var lastWrite = File.GetLastWriteTimeUtc(modelPath);
+
+                // create new instance which should load existing model instead of training from scratch
+                var service2 = new CategorizationService(db);
+                var lastWriteAfter = File.GetLastWriteTimeUtc(modelPath);
+                Assert.Equal(lastWrite, lastWriteAfter);
+
+                var category = service2.CategorizeTransaction(new Transaction
+                {
+                    TransactionId = Guid.NewGuid().ToString(),
+                    Date = DateTime.UtcNow,
+                    Amount = -299,
+                    Description = "Streaming service"
+                });
+
+                Assert.Equal("Розваги", category);
+            }
+            finally
+            {
+                Cleanup(temp);
+            }
+        }
+
+        [Fact]
+        public async Task PredictionEngineIsRefreshedAfterRetrain()
+        {
+            var temp = CreateIsolatedAppData();
+            try
+            {
+                var db = new DatabaseService();
+                var service = new CategorizationService(db);
+
+                var engineField = typeof(CategorizationService)
+                    .GetField("_predictionEngine", BindingFlags.NonPublic | BindingFlags.Instance);
+                var before = engineField?.GetValue(service);
+
+                // add some transactions and retrain to force pipeline rebuild
+                AddTransactions(db, "Local bakery", "Продукти", 5, -50);
+                service.TrainModel();
+
+                await Task.Delay(50); // ensure model persisted
+                var after = engineField?.GetValue(service);
+                Assert.NotSame(before, after);
+            }
+            finally
+            {
+                Cleanup(temp);
+            }
+        }
+
         private static string CreateIsolatedAppData()
         {
             var temp = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -194,4 +257,3 @@ namespace FinDesk.Tests
         }
     }
 }
-
