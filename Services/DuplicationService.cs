@@ -148,7 +148,7 @@ namespace FinDesk.Services
                 {
                     Date = t.Date.Date,
                     Amount = Math.Round(t.Amount, 2),
-                    DescriptionPrefix = t.Description?.Substring(0, Math.Min(20, t.Description?.Length ?? 0)) ?? string.Empty
+                    DescriptionPrefix = (t.Description ?? string.Empty).Substring(0, Math.Min(20, (t.Description ?? string.Empty).Length))
                 })
                 .Where(g => g.Count() > 1)
                 .Select(g => g.ToList())
@@ -189,4 +189,3 @@ namespace FinDesk.Services
         }
     }
 }
-

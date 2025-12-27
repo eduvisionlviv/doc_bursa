@@ -241,7 +241,7 @@ namespace FinDesk.Services
                 null => string.Empty,
                 DateTime dateTime => dateTime,
                 DateTimeOffset dateTimeOffset => dateTimeOffset.DateTime,
-                decimal decimalValue => decimalValue,
+                decimal decimalValue => Convert.ToDouble(decimalValue),
                 double or float or int or long or short or byte => value,
                 string text => text,
                 bool boolean => boolean,
