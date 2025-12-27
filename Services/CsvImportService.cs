@@ -33,6 +33,8 @@ namespace FinDesk.Services
         {
             try
             {
+                // Цей рядок ОБОВ'ЯЗКОВИЙ для роботи з Windows-1251 у .NET Core/8
+                Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
                 return Encoding.GetEncoding(codePage);
             }
             catch (Exception)
