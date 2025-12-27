@@ -121,7 +121,13 @@ namespace doc_bursa.ViewModels
             try
             {
                 IsBusy = true;
-                await _db.AddDataSourceAsync(source, cancellationToken);
+                
+                // 👇 ВИПРАВЛЕННЯ: Виконуємо у фоновому потоці, щоб UI не зависав
+                await Task.Run(async () => 
+                {
+                    await _db.AddDataSourceAsync(source, cancellationToken);
+                }, cancellationToken);
+
                 await LoadSources();
                 IsAddingSource = false;
                 MessageBox.Show("Джерело даних додано успішно!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -204,7 +210,6 @@ namespace doc_bursa.ViewModels
                 IsBusy = true;
                 MessageBox.Show("Синхронізація запущена...", "Інформація", MessageBoxButton.OK, MessageBoxImage.Information);
 
-                // Тут буде виклик відповідного API
                 switch (source.Type)
                 {
                     case "Monobank":
@@ -246,14 +251,12 @@ namespace doc_bursa.ViewModels
             if (dialog.ShowDialog() == true)
             {
                 var bankType = "universal";
-                
-                // Визначаємо тип банку з назви файлу
                 var fileName = dialog.SafeFileName.ToLower();
                 if (fileName.Contains("mono")) bankType = "monobank";
                 else if (fileName.Contains("privat")) bankType = "privatbank";
                 else if (fileName.Contains("ukrsib")) bankType = "ukrsibbank";
 
-                var progress = new Progress<int>(_ => { }); // reserved for future UI progress binding
+                var progress = new Progress<int>(_ => { });
 
                 try
                 {
@@ -263,7 +266,6 @@ namespace doc_bursa.ViewModels
                     if (result.Errors.Any())
                     {
                         var details = string.Join("\n", result.Errors.Take(5));
-                        // Зберігаємо детальний лог
                         await _importLog.SaveImportLogAsync(result, dialog.FileName);
                         MessageBox.Show($"Помилка імпорту: {details}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
@@ -308,7 +310,6 @@ namespace doc_bursa.ViewModels
                         progress, 
                         cancellationToken);
 
-                    // Зберігаємо детальний лог
                     await _importLog.SaveImportLogAsync(result, dialog.FileName);
 
                     if (result.Errors.Any())
@@ -333,19 +334,11 @@ namespace doc_bursa.ViewModels
                 }
                 catch (OperationCanceledException)
                 {
-                    MessageBox.Show(
-                        "Імпорт Excel скасовано користувачем.", 
-                        "Скасовано", 
-                        MessageBoxButton.OK, 
-                        MessageBoxImage.Information);
+                    MessageBox.Show("Імпорт Excel скасовано користувачем.", "Скасовано", MessageBoxButton.OK, MessageBoxImage.Information);
                 }
                 catch (Exception ex)
                 {
-                    MessageBox.Show(
-                        $"Критична помилка: {ex.Message}", 
-                        "Помилка", 
-                        MessageBoxButton.OK, 
-                        MessageBoxImage.Error);
+                    MessageBox.Show($"Критична помилка: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
                 finally
                 {
