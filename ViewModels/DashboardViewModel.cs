@@ -1,15 +1,22 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FinDesk.Models;
-using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
+using LiveChartsCore;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
+using SkiaSharp;
 
-namespace FinDesk.ViewModels
+namespace doc_bursa.ViewModels
 {
     public partial class DashboardViewModel : ObservableObject
-    {        private readonly DatabaseService _db;
+    {
+        private readonly DatabaseService _db;
+
         [ObservableProperty]
         private decimal totalIncome;
 
@@ -23,7 +30,24 @@ namespace FinDesk.ViewModels
         private List<Category> categories = new();
 
         [ObservableProperty]
+        private ObservableCollection<Transaction> recentTransactions = new();
+
+        [ObservableProperty]
         private string selectedPeriod = "Поточний місяць";
+
+        private ISeries[] miniTrendSeries = Array.Empty<ISeries>();
+        public ISeries[] MiniTrendSeries
+        {
+            get => miniTrendSeries;
+            set => SetProperty(ref miniTrendSeries, value);
+        }
+
+        private Axis[] miniTrendAxes = Array.Empty<Axis>();
+        public Axis[] MiniTrendAxes
+        {
+            get => miniTrendAxes;
+            set => SetProperty(ref miniTrendAxes, value);
+        }
 
         public List<string> Periods { get; } = new()
         {
@@ -60,6 +84,45 @@ namespace FinDesk.ViewModels
                 })
                 .OrderByDescending(c => c.Amount)
                 .ToList();
+
+            var recent = transactions
+                .OrderByDescending(t => t.Date)
+                .Take(10)
+                .ToList();
+            RecentTransactions = new ObservableCollection<Transaction>(recent);
+
+            BuildMiniTrend(transactions);
+        }
+
+        private void BuildMiniTrend(List<Transaction> transactions)
+        {
+            var last7days = transactions
+                .GroupBy(t => t.Date.Date)
+                .OrderByDescending(g => g.Key)
+                .Take(7)
+                .OrderBy(g => g.Key)
+                .Select(g => new
+                {
+                    Label = g.Key.ToString("dd.MM"),
+                    Balance = g.Sum(t => t.Amount)
+                })
+                .ToList();
+
+            MiniTrendAxes = new[]
+            {
+                new Axis { Labels = last7days.Select(x => x.Label).ToArray(), LabelsRotation = 20 }
+            };
+
+            MiniTrendSeries = new ISeries[]
+            {
+                new LineSeries<double>
+                {
+                    Values = last7days.Select(x => (double)x.Balance).ToArray(),
+                    Fill = null,
+                    GeometrySize = 6,
+                    Stroke = new SolidColorPaint(SKColors.MediumPurple) { StrokeThickness = 2 }
+                }
+            };
         }
 
         partial void OnSelectedPeriodChanged(string value)
@@ -81,5 +144,3 @@ namespace FinDesk.ViewModels
         }
     }
 }
-
-

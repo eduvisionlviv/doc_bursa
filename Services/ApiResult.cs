@@ -1,6 +1,6 @@
 using System.Net;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     public record ApiResult<T>(bool Success, T Data, string? ErrorMessage = null, HttpStatusCode? StatusCode = null)
     {

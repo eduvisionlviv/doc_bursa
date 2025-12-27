@@ -1,5 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 
-namespace FinDesk.ViewModels;
+namespace doc_bursa.ViewModels;
 
 public abstract class ViewModelBase : ObservableObject { }

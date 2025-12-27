@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace FinDesk.Models
+namespace doc_bursa.Models
 {
     /// <summary>
     /// Типи звітів, що підтримуються системою.

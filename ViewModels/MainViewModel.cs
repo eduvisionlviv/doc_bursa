@@ -1,9 +1,9 @@
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FinDesk.Views;
+using doc_bursa.Views;
 
-namespace FinDesk.ViewModels
+namespace doc_bursa.ViewModels
 {
     public partial class MainViewModel : ObservableObject
     {

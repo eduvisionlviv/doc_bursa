@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
-using FinDesk.Models;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using doc_bursa.Models;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     /// <summary>
     /// Сервіс роботи з транзакціями з інтегрованою дедуплікацією.
@@ -44,6 +47,37 @@ namespace FinDesk.Services
         public int BulkDeduplicate()
         {
             return _deduplicationService.BulkDetectAndMark();
+        }
+
+        public Task<int> AddTransactionsBatchAsync(IEnumerable<Transaction> transactions, CancellationToken cancellationToken = default)
+        {
+            return Task.Run(() =>
+            {
+                var prepared = new List<Transaction>();
+
+                foreach (var transaction in transactions)
+                {
+                    if (cancellationToken.IsCancellationRequested)
+                    {
+                        break;
+                    }
+
+                    if (_databaseService.GetTransactionByTransactionId(transaction.TransactionId) != null)
+                    {
+                        continue;
+                    }
+
+                    _deduplicationService.DetectDuplicate(transaction);
+                    prepared.Add(transaction);
+                }
+
+                if (prepared.Count > 0)
+                {
+                    _databaseService.SaveTransactions(prepared);
+                }
+
+                return prepared.Count;
+            }, cancellationToken);
         }
     }
 }

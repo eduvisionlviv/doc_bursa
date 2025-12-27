@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FinDesk.Models;
-using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
 using Microsoft.Win32;
 
-namespace FinDesk.ViewModels
+namespace doc_bursa.ViewModels
 {
     public partial class SourcesViewModel : ObservableObject
     {
@@ -88,8 +88,8 @@ namespace FinDesk.ViewModels
             NewSourceClientSecret = string.Empty;
         }
 
-        [RelayCommand]
-        private async Task SaveSourceAsync()
+        [RelayCommand(IncludeCancelCommand = true)]
+        private async Task SaveSourceAsync(CancellationToken cancellationToken)
         {
             if (string.IsNullOrWhiteSpace(NewSourceName))
             {
@@ -116,11 +116,15 @@ namespace FinDesk.ViewModels
             try
             {
                 IsBusy = true;
-                await _db.AddDataSourceAsync(source);
+                await _db.AddDataSourceAsync(source, cancellationToken);
                 await LoadSources();
                 IsAddingSource = false;
 
                 MessageBox.Show("Джерело даних додано успішно!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (OperationCanceledException)
+            {
+                MessageBox.Show("Збереження скасовано користувачем.", "Скасовано", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (Exception ex)
             {
@@ -226,8 +230,8 @@ namespace FinDesk.ViewModels
             }
         }
 
-        [RelayCommand]
-        private void ImportCsv()
+        [RelayCommand(IncludeCancelCommand = true)]
+        private async Task ImportCsv(CancellationToken cancellationToken)
         {
             var dialog = new OpenFileDialog
             {
@@ -245,23 +249,34 @@ namespace FinDesk.ViewModels
                 else if (fileName.Contains("privat")) bankType = "privatbank";
                 else if (fileName.Contains("ukrsib")) bankType = "ukrsibbank";
 
-                var result = _csvImport.ImportFromCsv(dialog.FileName, bankType);
-
-                if (result.Errors.Any())
+                var progress = new Progress<int>(_ => { }); // reserved for future UI progress binding
+                try
                 {
-                    var details = string.Join("\n", result.Errors.Take(5));
-                    MessageBox.Show($"Помилка імпорту: {details}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                    IsBusy = true;
+                    var result = await _csvImport.ImportFromCsvAsync(dialog.FileName, bankType, progress, cancellationToken);
 
-                MessageBox.Show(
-                    $"Імпортовано: {result.Imported}\nПропущено: {result.Skipped}\nФормат: {result.Format}\nКодування: {result.EncodingUsed}",
-                    "Імпорт завершено",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Information
-                );
+                    if (result.Errors.Any())
+                    {
+                        var details = string.Join("\n", result.Errors.Take(5));
+                        MessageBox.Show($"Помилка імпорту: {details}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+
+                    MessageBox.Show(
+                        $"Імпортовано: {result.Imported}\nПропущено: {result.Skipped}\nФормат: {result.Format}\nКодування: {result.EncodingUsed}",
+                        "Імпорт завершено",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Information
+                    );
+                }
+                catch (OperationCanceledException)
+                {
+                    MessageBox.Show("Імпорт CSV скасовано.", "Скасовано", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                finally
+                {
+                    IsBusy = false;
+                }
             }
         }
     }
 }
-
-

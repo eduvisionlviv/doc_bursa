@@ -1,7 +1,7 @@
 using System.Windows;
-using FinDesk.ViewModels;
+using doc_bursa.ViewModels;
 
-namespace FinDesk
+namespace doc_bursa
 {
     public partial class MainWindow : Window
     {
