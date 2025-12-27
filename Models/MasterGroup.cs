@@ -169,7 +169,7 @@ namespace doc_bursa.Models
             Color = "#2196F3"; // Синій за замовчуванням
         }
 
-        public event PropertyChangedEventHandler PropertyChanged;
+        public event PropertyChangedEventHandler? PropertyChanged;
 
         protected virtual void OnPropertyChanged(string propertyName)
         {
