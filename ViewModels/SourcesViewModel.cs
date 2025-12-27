@@ -93,8 +93,9 @@ namespace doc_bursa.ViewModels
             NewSourceClientSecret = string.Empty;
         }
 
-        [RelayCommand(IncludeCancelCommand = true)]
-        private async Task SaveSourceAsync(CancellationToken cancellationToken)
+        // 👇 ОНОВЛЕНО: Простий та надійний метод без зайвого CancellationToken
+        [RelayCommand]
+        private async Task SaveSourceAsync()
         {
             if (string.IsNullOrWhiteSpace(NewSourceName))
             {
@@ -122,23 +123,16 @@ namespace doc_bursa.ViewModels
             {
                 IsBusy = true;
                 
-                // 👇 ВИПРАВЛЕННЯ: Виконуємо у фоновому потоці, щоб UI не зависав
-                await Task.Run(async () => 
-                {
-                    await _db.AddDataSourceAsync(source, cancellationToken);
-                }, cancellationToken);
+                // Зберігаємо безпосередньо, асинхронно
+                await _db.AddDataSourceAsync(source);
 
                 await LoadSources();
                 IsAddingSource = false;
                 MessageBox.Show("Джерело даних додано успішно!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
             }
-            catch (OperationCanceledException)
-            {
-                MessageBox.Show("Збереження скасовано користувачем.", "Скасовано", MessageBoxButton.OK, MessageBoxImage.Information);
-            }
             catch (Exception ex)
             {
-                MessageBox.Show($"Не вдалося зберегти джерело: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Не вдалося зберегти джерело: {ex.Message}\n\n{ex.StackTrace}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
@@ -210,18 +204,8 @@ namespace doc_bursa.ViewModels
                 IsBusy = true;
                 MessageBox.Show("Синхронізація запущена...", "Інформація", MessageBoxButton.OK, MessageBoxImage.Information);
 
-                switch (source.Type)
-                {
-                    case "Monobank":
-                        // await SyncMonobank(source);
-                        break;
-                    case "PrivatBank":
-                        // await SyncPrivatBank(source);
-                        break;
-                    case "Ukrsibbank":
-                        // await SyncUkrsibbank(source);
-                        break;
-                }
+                // Тут буде логіка синхронізації
+                await Task.Delay(1000); 
 
                 source.LastSync = DateTime.Now;
                 await _db.UpdateDataSourceAsync(source);
