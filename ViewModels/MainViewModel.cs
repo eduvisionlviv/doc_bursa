@@ -1,4 +1,4 @@
-using System.Windows;
+using System;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using doc_bursa.Views;
@@ -10,26 +10,41 @@ namespace doc_bursa.ViewModels
         [ObservableProperty]
         private object? currentView;
 
+        // ViewModels
+        public DashboardViewModel DashboardViewModel { get; }
+        public TransactionsViewModel TransactionsViewModel { get; }
+        public SourcesViewModel SourcesViewModel { get; }
+        public BudgetViewModel BudgetViewModel { get; }
+        public GroupsViewModel GroupsViewModel { get; }
+        public AnalyticsViewModel AnalyticsViewModel { get; }
+
         public MainViewModel()
         {
-            CurrentView = new DashboardView();
+            // Ініціалізуємо ViewModels
+            DashboardViewModel = new DashboardViewModel();
+            TransactionsViewModel = new TransactionsViewModel();
+            SourcesViewModel = new SourcesViewModel();
+            BudgetViewModel = new BudgetViewModel();
+            GroupsViewModel = new GroupsViewModel();
+            AnalyticsViewModel = new AnalyticsViewModel();
+
+            // За замовчуванням показуємо Dashboard
+            CurrentView = new DashboardView { DataContext = DashboardViewModel };
         }
 
         [RelayCommand]
-        private void Navigate(string viewName)
+        private void Navigate(string destination)
         {
-            CurrentView = viewName switch
+            CurrentView = destination switch
             {
-                "Dashboard" => new DashboardView(),
-                "Transactions" => new TransactionsView(),
-                "Sources" => new SourcesView(),
-                "Budgets" => new BudgetView(),
-                "Groups" => new GroupsView(),
-                "Analytics" => new AnalyticsView(),
+                "Dashboard" => new DashboardView { DataContext = DashboardViewModel },
+                "Transactions" => new TransactionsView { DataContext = TransactionsViewModel },
+                "Sources" => new SourcesView { DataContext = SourcesViewModel },
+                "Budgets" => new BudgetView { DataContext = BudgetViewModel },
+                "Groups" => new GroupsView { DataContext = GroupsViewModel },
+                "Analytics" => new AnalyticsView { DataContext = AnalyticsViewModel },
                 _ => CurrentView
             };
         }
     }
 }
-
-
