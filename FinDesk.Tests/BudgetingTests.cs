@@ -143,6 +143,27 @@ namespace FinDesk.Tests
             Assert.Equal(41.67m, analyses[travelBudget.Id].UsagePercentage);
         }
 
+        [Fact]
+        public void BudgetAnalyzer_ReanchorsPeriodToReferenceDateWhenRangeMissing()
+        {
+            var budget = _budgetService.CreateBudget(new Budget
+            {
+                Name = "Groceries",
+                Category = "Продукти",
+                Limit = 500m,
+                Frequency = BudgetFrequency.Monthly,
+                StartDate = new DateTime(2025, 1, 1)
+            });
+
+            AddTransaction("t11", -200m, "Продукти", new DateTime(2025, 1, 10));
+            AddTransaction("t12", -300m, "Продукти", new DateTime(2025, 2, 5));
+
+            var analysis = _budgetService.EvaluateBudget(budget.Id, referenceDate: new DateTime(2025, 2, 15));
+
+            Assert.Equal(300m, analysis.ActualSpent);
+            Assert.Equal(60m, analysis.UsagePercentage);
+        }
+
         private void AddTransaction(string transactionId, decimal amount, string category, DateTime date)
         {
             _transactionService.AddTransaction(new Transaction
