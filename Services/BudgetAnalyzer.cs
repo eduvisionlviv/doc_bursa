@@ -42,7 +42,7 @@ namespace doc_bursa.Services
                 throw new ArgumentNullException(nameof(budget));
             }
 
-            var (periodStart, periodEnd) = ResolvePeriod(budget, from, to);
+            var (periodStart, periodEnd) = ResolvePeriod(budget, from, to, referenceDate);
             var spent = CalculateSpendingForCategory(budget.Category, periodStart, periodEnd);
             var usage = budget.Limit > 0 ? Math.Round((spent / budget.Limit) * 100, 2) : 0;
             var remaining = budget.Limit - spent;
@@ -154,28 +154,65 @@ namespace doc_bursa.Services
             return transactions;
         }
 
-        private (DateTime start, DateTime end) ResolvePeriod(Budget budget, DateTime? from, DateTime? to)
+        private (DateTime start, DateTime end) ResolvePeriod(Budget budget, DateTime? from, DateTime? to, DateTime? referenceDate)
         {
             if (from.HasValue && to.HasValue)
             {
                 return (from.Value, to.Value);
             }
 
-            var start = budget.StartDate == default ? DateTime.UtcNow.Date : budget.StartDate;
-            DateTime end = budget.Frequency switch
+            var reference = referenceDate?.Date ?? DateTime.UtcNow.Date;
+            var start = budget.StartDate == default ? reference : budget.StartDate.Date;
+            if (budget.EndDate.HasValue && reference > budget.EndDate.Value.Date)
+            {
+                reference = budget.EndDate.Value.Date;
+            }
+
+            var currentStart = start;
+            var currentEnd = CalculatePeriodEnd(currentStart, budget.Frequency);
+
+            while (reference > currentEnd && (!budget.EndDate.HasValue || currentEnd < budget.EndDate.Value.Date))
+            {
+                var nextStart = GetNextPeriodStart(currentStart, budget.Frequency);
+                var nextEnd = CalculatePeriodEnd(nextStart, budget.Frequency);
+
+                if (budget.EndDate.HasValue && nextStart > budget.EndDate.Value.Date)
+                {
+                    break;
+                }
+
+                currentStart = nextStart;
+                currentEnd = nextEnd;
+            }
+
+            if (budget.EndDate.HasValue && currentEnd > budget.EndDate.Value.Date)
+            {
+                currentEnd = budget.EndDate.Value.Date;
+            }
+
+            return (currentStart, currentEnd);
+        }
+
+        private static DateTime CalculatePeriodEnd(DateTime start, BudgetFrequency frequency)
+        {
+            return frequency switch
             {
                 BudgetFrequency.Weekly => start.AddDays(6),
                 BudgetFrequency.Quarterly => start.AddMonths(3).AddDays(-1),
                 BudgetFrequency.Yearly => start.AddYears(1).AddDays(-1),
                 _ => start.AddMonths(1).AddDays(-1)
             };
+        }
 
-            if (budget.EndDate.HasValue && budget.EndDate.Value < end)
+        private static DateTime GetNextPeriodStart(DateTime start, BudgetFrequency frequency)
+        {
+            return frequency switch
             {
-                end = budget.EndDate.Value;
-            }
-
-            return (start, end);
+                BudgetFrequency.Weekly => start.AddDays(7),
+                BudgetFrequency.Quarterly => start.AddMonths(3),
+                BudgetFrequency.Yearly => start.AddYears(1),
+                _ => start.AddMonths(1)
+            };
         }
 
         private BudgetForecast BuildForecast(Budget budget, decimal spent, DateTime start, DateTime end, DateTime? referenceDate)
