@@ -184,21 +184,20 @@ private void SyncSource(DataSource source)
                 else if (fileName.Contains("privat")) bankType = "privatbank";
                 else if (fileName.Contains("ukrsib")) bankType = "ukrsibbank";
 
-                var (imported, skipped, error) = _csvImport.ImportFromCsv(dialog.FileName, bankType);
+                var result = _csvImport.ImportFromCsv(dialog.FileName, bankType);
 
-                if (!string.IsNullOrEmpty(error))
+                if (result.Errors.Any())
                 {
-                    MessageBox.Show($"Помилка імпорту: {error}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+                    var details = string.Join("\n", result.Errors.Take(5));
+                    MessageBox.Show($"Помилка імпорту: {details}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
-                else
-                {
-                    MessageBox.Show(
-                        $"Імпортовано: {imported}\nПропущено (дублікати): {skipped}",
-                        "Імпорт завершено",
-                        MessageBoxButton.OK,
-                        MessageBoxImage.Information
-                    );
-                }
+
+                MessageBox.Show(
+                    $"Імпортовано: {result.Imported}\nПропущено: {result.Skipped}\nФормат: {result.Format}\nКодування: {result.EncodingUsed}",
+                    "Імпорт завершено",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Information
+                );
             }
         }
     }

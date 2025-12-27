@@ -103,38 +103,11 @@ namespace FinDesk.Services
         }
 
         // Імпорт транзакцій з CSV
-        public async Task<List<Transaction>> ImportFromCsvAsync(string filePath)
+        public Task<List<Transaction>> ImportFromCsvAsync(string filePath)
         {
-            var transactions = new List<Transaction>();
-
-            try
-            {
-                var lines = await File.ReadAllLinesAsync(filePath, Encoding.UTF8);
-                
-                // Пропускаємо заголовок
-                for (int i = 1; i < lines.Length; i++)
-                {
-                    var parts = lines[i].Split(',');
-                    if (parts.Length >= 6)
-                    {
-                        transactions.Add(new Transaction
-                        {
-                            TransactionDate = DateTime.Parse(parts[0]),
-                            Description = parts[1],
-                            Amount = decimal.Parse(parts[2]),
-                            Category = parts[3],
-                            Account = parts[4],
-                            Balance = decimal.Parse(parts[5])
-                        });
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"CSV Import Error: {ex.Message}");
-            }
-
-            return transactions;
+            var service = new CsvImportService(new DatabaseService(), new CategorizationService(new DatabaseService()));
+            var result = service.ImportFromCsv(filePath);
+            return Task.FromResult(new List<Transaction>()); // keeping signature but functionality moved to CsvImportService
         }
     }
 }

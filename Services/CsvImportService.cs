@@ -3,7 +3,10 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using FinDesk.Models;
+using FluentValidation;
+using Serilog;
 
 namespace FinDesk.Services
 {
@@ -11,129 +14,529 @@ namespace FinDesk.Services
     {
         private readonly DatabaseService _db;
         private readonly CategorizationService _categorization;
+        private readonly ILogger _logger;
+        private readonly CsvRowValidator _validator;
+        private static readonly Encoding[] _candidateEncodings =
+        {
+            new UTF8Encoding(false, true),
+            Encoding.Unicode,
+            Encoding.BigEndianUnicode,
+            GetEncodingSafe(1251),
+            Encoding.GetEncoding("iso-8859-1"),
+            GetEncodingSafe(1252)
+        };
+
+        private static readonly string[] _dateFormats =
+        {
+            "dd.MM.yyyy",
+            "yyyy-MM-dd",
+            "dd/MM/yyyy",
+            "MM/dd/yyyy",
+            "dd MMM yyyy",
+            "yyyyMMdd",
+            "dd-MM-yyyy",
+            "yyyy/MM/dd",
+            "dd.MM.yyyy HH:mm",
+            "yyyy-MM-ddTHH:mm:ss",
+            "dd/MM/yyyy HH:mm",
+            "dd.MM.yy"
+        };
 
         public CsvImportService(DatabaseService db, CategorizationService categorization)
         {
             _db = db;
             _categorization = categorization;
+            _logger = Log.ForContext<CsvImportService>();
+            _validator = new CsvRowValidator();
         }
 
-        public (int imported, int skipped, string error) ImportFromCsv(string filePath, string bankType)
+        public CsvImportResult ImportFromCsv(string filePath, string? bankType = null)
         {
             try
             {
-                var lines = File.ReadAllLines(filePath);
-                if (lines.Length < 2) return (0, 0, "Файл порожній або не містить даних");
+                var lines = ReadAllLinesWithEncodingFallback(filePath, out var usedEncoding);
+                if (lines.Length < 2)
+                {
+                    return CsvImportResult.Error($"Файл порожній або не містить даних ({usedEncoding?.WebName ?? "невідоме кодування"})");
+                }
 
-                var imported = 0;
-                var skipped = 0;
+                var delimiter = DetectDelimiter(lines[0]);
+                var headers = SplitCsvLine(lines[0], delimiter)
+                    .Select(h => h.Trim('"', '\\', ' '))
+                    .ToArray();
+
+                var format = ResolveFormat(bankType, headers);
+                var profile = CsvFormatProfiles.GetProfile(format);
+
+                var total = lines.Length - 1;
+                var result = new CsvImportResult(total) { EncodingUsed = usedEncoding?.WebName ?? "unknown", Format = format.ToString() };
 
                 for (int i = 1; i < lines.Length; i++)
                 {
-                    try
+                    var lineNumber = i + 1; // 1-based including header
+                    var values = SplitCsvLine(lines[i], delimiter);
+                    var rowDict = BuildRowDictionary(headers, values);
+                    var mapped = profile.Map(rowDict);
+
+                    if (mapped == null)
                     {
-                        var transaction = ParseCsvLine(lines[i], bankType);
-                        if (transaction != null && _db.AddTransaction(transaction))
-                        {
-                            imported++;
-                        }
-                        else
-                        {
-                            skipped++;
-                        }
+                        result.Skipped++;
+                        result.Errors.Add($"Рядок {lineNumber}: неможливо прочитати дані формату {format}");
+                        continue;
                     }
-                    catch
+
+                    var validation = _validator.Validate(mapped);
+                    if (!validation.IsValid)
                     {
-                        skipped++;
+                        result.Skipped++;
+                        result.Errors.Add($"Рядок {lineNumber}: {string.Join(", ", validation.Errors.Select(e => e.ErrorMessage))}");
+                        continue;
                     }
+
+                    if (!TryParseTransaction(mapped, format, out var transaction, out var parseError))
+                    {
+                        result.Skipped++;
+                        result.Errors.Add($"Рядок {lineNumber}: {parseError}");
+                        continue;
+                    }
+
+                    if (_db.AddTransaction(transaction))
+                    {
+                        result.Imported++;
+                    }
+                    else
+                    {
+                        result.Skipped++;
+                        result.Errors.Add($"Рядок {lineNumber}: транзакцію пропущено (можливий дублікат або помилка бази)");
+                    }
+
+                    var progressMessage = $"{result.Imported + result.Skipped} з {total}: {transaction.Description} ({transaction.Amount})";
+                    result.ProgressLog.Add(progressMessage);
+                    _logger.Information(progressMessage);
                 }
 
-                return (imported, skipped, string.Empty);
+                return result;
             }
             catch (Exception ex)
             {
-                return (0, 0, ex.Message);
+                _logger.Error(ex, "CSV import failed");
+                return CsvImportResult.Error(ex.Message);
             }
         }
 
-        private Transaction? ParseCsvLine(string line, string bankType)
+        private static Encoding? GetEncodingSafe(int codepage)
         {
-            var parts = line.Split(',', ';');
-            if (parts.Length < 3) return null;
-
-            return bankType.ToLower() switch
+            try
             {
-                "monobank" => ParseMonobankCsv(parts),
-                "privatbank" => ParsePrivatBankCsv(parts),
-                "ukrsibbank" => ParseUkrsibBankCsv(parts),
-                "universal" => ParseUniversalCsv(parts),
-                _ => ParseUniversalCsv(parts)
+                return Encoding.GetEncoding(codepage);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static string[] ReadAllLinesWithEncodingFallback(string filePath, out Encoding? usedEncoding)
+        {
+            foreach (var enc in _candidateEncodings.Where(e => e != null))
+            {
+                try
+                {
+                    var lines = File.ReadAllLines(filePath, enc!);
+                    usedEncoding = enc;
+                    return lines;
+                }
+                catch
+                {
+                    // try next
+                }
+            }
+
+            usedEncoding = Encoding.UTF8;
+            return File.ReadAllLines(filePath, Encoding.UTF8);
+        }
+
+        private static char DetectDelimiter(string headerLine)
+        {
+            var candidates = new[] { ',', ';', '\t', '|' };
+            return candidates
+                .Select(c => new { Delimiter = c, Count = headerLine.Count(ch => ch == c) })
+                .OrderByDescending(x => x.Count)
+                .First().Delimiter;
+        }
+
+        private static CsvFormat ResolveFormat(string? bankType, string[] headers)
+        {
+            if (!string.IsNullOrWhiteSpace(bankType) && Enum.TryParse<CsvFormat>(bankType, true, out var manualFormat))
+            {
+                return manualFormat;
+            }
+
+            return CsvFormatDetector.Detect(headers);
+        }
+
+        private static string[] SplitCsvLine(string line, char delimiter)
+        {
+            var values = new List<string>();
+            var sb = new StringBuilder();
+            var inQuotes = false;
+
+            for (int i = 0; i < line.Length; i++)
+            {
+                var ch = line[i];
+
+                if (ch == '"')
+                {
+                    if (inQuotes && i + 1 < line.Length && line[i + 1] == '"')
+                    {
+                        sb.Append('"');
+                        i++; // skip escaped quote
+                    }
+                    else
+                    {
+                        inQuotes = !inQuotes;
+                    }
+                    continue;
+                }
+
+                if (ch == delimiter && !inQuotes)
+                {
+                    values.Add(sb.ToString());
+                    sb.Clear();
+                }
+                else
+                {
+                    sb.Append(ch);
+                }
+            }
+
+            values.Add(sb.ToString());
+            return values.ToArray();
+        }
+
+        private static Dictionary<string, string> BuildRowDictionary(string[] headers, string[] values)
+        {
+            var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < headers.Length; i++)
+            {
+                var key = headers[i].Trim();
+                var value = i < values.Length ? values[i].Trim() : string.Empty;
+                dict[key] = value;
+            }
+
+            return dict;
+        }
+
+        private bool TryParseTransaction(MappedCsvRow mapped, CsvFormat format, out Transaction transaction, out string error)
+        {
+            transaction = new Transaction();
+
+            if (!DateTime.TryParseExact(mapped.Date, _dateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+            {
+                error = $"Неправильна дата: {mapped.Date}";
+                return false;
+            }
+
+            if (!decimal.TryParse(mapped.Amount, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount))
+            {
+                error = $"Неправильна сума: {mapped.Amount}";
+                return false;
+            }
+
+            transaction.Date = parsedDate;
+            transaction.Description = mapped.Description;
+            transaction.Amount = amount;
+            transaction.Account = mapped.Account ?? string.Empty;
+            transaction.Balance = mapped.Balance ?? 0m;
+            transaction.Source = mapped.Source ?? format.ToString();
+            transaction.Category = !string.IsNullOrWhiteSpace(mapped.Category)
+                ? mapped.Category
+                : _categorization.CategorizeTransaction(transaction);
+            transaction.TransactionId = mapped.TransactionId ?? $"{transaction.Source}-{transaction.Date:yyyyMMdd}-{Math.Abs(transaction.Description.GetHashCode())}";
+            transaction.Hash = mapped.Hash ?? string.Empty;
+
+            error = string.Empty;
+            return true;
+        }
+    }
+
+    public enum CsvFormat
+    {
+        Monobank,
+        PrivatBank,
+        UkrsibBank,
+        OtpBank,
+        AlfaBank,
+        Pumb,
+        Raiffeisen,
+        Wise,
+        Revolut,
+        Sber,
+        Universal
+    }
+
+    public record MappedCsvRow
+    {
+        public string Date { get; init; } = string.Empty;
+        public string Description { get; init; } = string.Empty;
+        public string Amount { get; init; } = string.Empty;
+        public string? Category { get; init; }
+        public string? Currency { get; init; }
+        public string? Account { get; init; }
+        public decimal? Balance { get; init; }
+        public string? Source { get; init; }
+        public string? TransactionId { get; init; }
+        public string? Hash { get; init; }
+    }
+
+    public class CsvRowValidator : AbstractValidator<MappedCsvRow>
+    {
+        public CsvRowValidator()
+        {
+            RuleFor(x => x.Date).NotEmpty().WithMessage("Дата відсутня");
+            RuleFor(x => x.Description).NotEmpty().WithMessage("Опис відсутній");
+            RuleFor(x => x.Amount).NotEmpty().WithMessage("Сума відсутня");
+        }
+    }
+
+    public class CsvImportResult
+    {
+        public int Imported { get; set; }
+        public int Skipped { get; set; }
+        public List<string> Errors { get; } = new();
+        public List<string> ProgressLog { get; } = new();
+        public string EncodingUsed { get; set; } = string.Empty;
+        public string Format { get; set; } = string.Empty;
+        public int Total { get; }
+
+        public CsvImportResult(int total)
+        {
+            Total = total;
+        }
+
+        public static CsvImportResult Error(string message)
+        {
+            var result = new CsvImportResult(0);
+            result.Errors.Add(message);
+            return result;
+        }
+    }
+
+    public static class CsvFormatDetector
+    {
+        public static CsvFormat Detect(IEnumerable<string> headers)
+        {
+            var headerList = headers.Select(h => h.Trim().ToLowerInvariant()).ToList();
+
+            if (headerList.Contains("дата") && headerList.Contains("опис") && headerList.Contains("сума") && headerList.Contains("валюта"))
+                return CsvFormat.Monobank;
+            if (headerList.Contains("час") && headerList.Contains("категорія"))
+                return CsvFormat.PrivatBank;
+            if (headerList.Contains("balance") && headerList.Contains("description"))
+                return CsvFormat.UkrsibBank;
+            if (headerList.Contains("booking date") || headerList.Contains("value date"))
+                return CsvFormat.Raiffeisen;
+            if (headerList.Contains("completed date") || headerList.Contains("reference"))
+                return CsvFormat.Revolut;
+            if (headerList.Contains("account number") || headerList.Contains("otp"))
+                return CsvFormat.OtpBank;
+            if (headerList.Any(h => h.Contains("alfa")) || headerList.Contains("дата операции"))
+                return CsvFormat.AlfaBank;
+            if (headerList.Contains("pumb") || headerList.Contains("merchant"))
+                return CsvFormat.Pumb;
+            if (headerList.Contains("wise") || headerList.Contains("payee"))
+                return CsvFormat.Wise;
+            if (headerList.Contains("сбербанк") || headerList.Contains("назначение платежа"))
+                return CsvFormat.Sber;
+
+            return CsvFormat.Universal;
+        }
+    }
+
+    public static class CsvFormatProfiles
+    {
+        private static readonly Dictionary<CsvFormat, Func<Dictionary<string, string>, MappedCsvRow?>> _profiles =
+            new()
+            {
+                { CsvFormat.Monobank, MapMonobank },
+                { CsvFormat.PrivatBank, MapPrivatBank },
+                { CsvFormat.UkrsibBank, MapUkrsib },
+                { CsvFormat.OtpBank, MapOtp },
+                { CsvFormat.AlfaBank, MapAlfa },
+                { CsvFormat.Pumb, MapPumb },
+                { CsvFormat.Raiffeisen, MapRaiffeisen },
+                { CsvFormat.Wise, MapWise },
+                { CsvFormat.Revolut, MapRevolut },
+                { CsvFormat.Sber, MapSber },
+                { CsvFormat.Universal, MapUniversal }
+            };
+
+        public static CsvFormatProfile GetProfile(CsvFormat format)
+        {
+            return new CsvFormatProfile(format, _profiles[format]);
+        }
+
+        private static string Get(Dictionary<string, string> row, params string[] keys)
+        {
+            foreach (var key in keys)
+            {
+                if (row.TryGetValue(key, out var value) && !string.IsNullOrWhiteSpace(value))
+                {
+                    return value;
+                }
+            }
+
+            return string.Empty;
+        }
+
+        private static MappedCsvRow? MapMonobank(Dictionary<string, string> row)
+        {
+            return new MappedCsvRow
+            {
+                Date = Get(row, "Дата", "date"),
+                Description = Get(row, "Опис", "description"),
+                Amount = Get(row, "Сума", "amount"),
+                Currency = Get(row, "Валюта", "currency"),
+                Source = "Monobank"
             };
         }
 
-        private Transaction? ParseMonobankCsv(string[] parts)
+        private static MappedCsvRow? MapPrivatBank(Dictionary<string, string> row)
         {
-            // Формат Monobank CSV: Дата,Опис,Сума,Валюта
-            if (parts.Length < 3) return null;
-
-            return new Transaction
+            var date = Get(row, "Дата", "date");
+            var time = Get(row, "Час", "time");
+            return new MappedCsvRow
             {
-                Date = DateTime.Parse(parts[0]),
-                Description = parts[1].Trim('"'),
-                Amount = decimal.Parse(parts[2], CultureInfo.InvariantCulture),
-                Source = "Monobank",
-                Category = "Інше",
-                TransactionId = $"mono_{DateTime.Now.Ticks}_{parts[1].GetHashCode()}"
+                Date = string.IsNullOrWhiteSpace(time) ? date : $"{date} {time}",
+                Description = Get(row, "Опис", "опис", "Description"),
+                Amount = Get(row, "Сума", "amount"),
+                Category = Get(row, "Категорія", "category"),
+                Source = "PrivatBank"
             };
         }
 
-        private Transaction? ParsePrivatBankCsv(string[] parts)
+        private static MappedCsvRow? MapUkrsib(Dictionary<string, string> row)
         {
-            // Формат PrivatBank CSV: Дата,Час,Категорія,Опис,Сума
-            if (parts.Length < 5) return null;
-
-            return new Transaction
+            return new MappedCsvRow
             {
-                Date = DateTime.Parse($"{parts[0]} {parts[1]}"),
-                Description = parts[3].Trim('"'),
-                Amount = decimal.Parse(parts[4], CultureInfo.InvariantCulture),
-                Source = "PrivatBank",
-                Category = parts[2].Trim('"'),
-                TransactionId = $"pb_{DateTime.Now.Ticks}_{parts[3].GetHashCode()}"
+                Date = Get(row, "Date", "Дата"),
+                Description = Get(row, "Description", "Опис"),
+                Amount = Get(row, "Amount", "Сума"),
+                Balance = decimal.TryParse(Get(row, "Balance"), NumberStyles.Any, CultureInfo.InvariantCulture, out var bal) ? bal : null,
+                Source = "Ukrsibbank"
             };
         }
 
-        private Transaction? ParseUkrsibBankCsv(string[] parts)
+        private static MappedCsvRow? MapOtp(Dictionary<string, string> row)
         {
-            // Формат Ukrsibbank CSV: Дата,Опис,Сума,Баланс
-            if (parts.Length < 3) return null;
-
-            return new Transaction
+            var debit = Get(row, "Debit", "Дебет");
+            var credit = Get(row, "Credit", "Кредит");
+            var amount = !string.IsNullOrWhiteSpace(debit) ? $"-{debit}" : credit;
+            return new MappedCsvRow
             {
-                Date = DateTime.Parse(parts[0]),
-                Description = parts[1].Trim('"'),
-                Amount = decimal.Parse(parts[2], CultureInfo.InvariantCulture),
-                Source = "Ukrsibbank",
-                Category = "Інше",
-                TransactionId = $"usb_{DateTime.Now.Ticks}_{parts[1].GetHashCode()}"
+                Date = Get(row, "Transaction date", "Дата"),
+                Description = Get(row, "Details", "Опис"),
+                Amount = amount,
+                Currency = Get(row, "Currency", "Валюта"),
+                Account = Get(row, "Account number", "Рахунок"),
+                Source = "OTP Bank"
             };
         }
 
-        private Transaction? ParseUniversalCsv(string[] parts)
+        private static MappedCsvRow? MapAlfa(Dictionary<string, string> row)
         {
-            // Універсальний формат: Дата,Опис,Сума
-            if (parts.Length < 3) return null;
-
-            return new Transaction
+            return new MappedCsvRow
             {
-                Date = DateTime.Parse(parts[0]),
-                Description = parts[1].Trim('"'),
-                Amount = decimal.Parse(parts[2], CultureInfo.InvariantCulture),
-                Source = "CSV Import",
-                Category = "Інше",
-                TransactionId = $"csv_{DateTime.Now.Ticks}_{parts[1].GetHashCode()}"
+                Date = Get(row, "Дата операции", "Дата"),
+                Description = Get(row, "Описание", "Description"),
+                Amount = Get(row, "Сумма в валюте операции", "Amount"),
+                Currency = Get(row, "Валюта", "Currency"),
+                Source = "Alfa Bank"
+            };
+        }
+
+        private static MappedCsvRow? MapPumb(Dictionary<string, string> row)
+        {
+            return new MappedCsvRow
+            {
+                Date = Get(row, "Date", "Дата"),
+                Description = Get(row, "Merchant", "Description", "Опис"),
+                Amount = Get(row, "Amount", "Сума"),
+                Account = Get(row, "Account", "Рахунок"),
+                Source = "PUMB"
+            };
+        }
+
+        private static MappedCsvRow? MapRaiffeisen(Dictionary<string, string> row)
+        {
+            return new MappedCsvRow
+            {
+                Date = Get(row, "Booking date", "Value date", "Дата"),
+                Description = Get(row, "Transaction details", "Details", "Опис"),
+                Amount = Get(row, "Amount", "Сума"),
+                Currency = Get(row, "Currency"),
+                Source = "Raiffeisen"
+            };
+        }
+
+        private static MappedCsvRow? MapWise(Dictionary<string, string> row)
+        {
+            return new MappedCsvRow
+            {
+                Date = Get(row, "Date", "Дата"),
+                Description = Get(row, "Payee Name", "Description"),
+                Amount = Get(row, "Amount", "Сума"),
+                Currency = Get(row, "Currency"),
+                Source = "Wise"
+            };
+        }
+
+        private static MappedCsvRow? MapRevolut(Dictionary<string, string> row)
+        {
+            return new MappedCsvRow
+            {
+                Date = Get(row, "Completed Date", "Started Date", "Date"),
+                Description = Get(row, "Reference", "Description"),
+                Amount = Get(row, "Amount", "Сума"),
+                Currency = Get(row, "Currency"),
+                Source = "Revolut"
+            };
+        }
+
+        private static MappedCsvRow? MapSber(Dictionary<string, string> row)
+        {
+            return new MappedCsvRow
+            {
+                Date = Get(row, "Дата операции", "Дата"),
+                Description = Get(row, "Описание", "Назначение платежа"),
+                Amount = Get(row, "Сумма", "Amount"),
+                Source = "Sber"
+            };
+        }
+
+        private static MappedCsvRow? MapUniversal(Dictionary<string, string> row)
+        {
+            return new MappedCsvRow
+            {
+                Date = Get(row, "Дата", "Date"),
+                Description = Get(row, "Опис", "Description"),
+                Amount = Get(row, "Сума", "Amount"),
+                Source = "CSV Import"
             };
         }
     }
-}
 
+    public class CsvFormatProfile
+    {
+        public CsvFormat Format { get; }
+        private readonly Func<Dictionary<string, string>, MappedCsvRow?> _mapper;
+
+        public CsvFormatProfile(CsvFormat format, Func<Dictionary<string, string>, MappedCsvRow?> mapper)
+        {
+            Format = format;
+            _mapper = mapper;
+        }
+
+        public MappedCsvRow? Map(Dictionary<string, string> row) => _mapper(row);
+    }
+}
