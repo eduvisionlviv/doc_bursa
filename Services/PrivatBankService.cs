@@ -25,7 +25,7 @@ namespace doc_bursa.Services
                 client.DefaultRequestHeaders.Add("User-Agent", "FinDesk Client");
                 client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
 
-                string followId = null;
+                string? followId = null;
                 bool existNextPage = true;
 
                 while (existNextPage)
@@ -43,7 +43,7 @@ namespace doc_bursa.Services
                     var json = await response.Content.ReadAsStringAsync();
                     var data = JsonConvert.DeserializeObject<JObject>(json);
 
-                    if (data["status"]?.ToString() != "SUCCESS")
+                    if (data == null || data["status"]?.ToString() != "SUCCESS")
                         throw new Exception($"API Error: {json}");
 
                     var transArray = data["transactions"] as JArray;
@@ -51,7 +51,10 @@ namespace doc_bursa.Services
                     {
                         foreach (var item in transArray)
                         {
-                            transactions.Add(MapTransaction(item));
+                            if (item != null)
+                            {
+                                transactions.Add(MapTransaction(item));
+                            }
                         }
                     }
 
@@ -64,15 +67,23 @@ namespace doc_bursa.Services
 
         private Transaction MapTransaction(JToken item)
         {
-            string dateStr = item["DATE_TIME_DAT_OD_TIM_P"]?.ToString() ?? item["DAT_OD"]?.ToString();
+            string dateStr = item["DATE_TIME_DAT_OD_TIM_P"]?.ToString() ?? item["DAT_OD"]?.ToString() ?? string.Empty;
             if (!DateTime.TryParse(dateStr, out DateTime date)) date = DateTime.Now;
 
-            decimal amount = item["SUM_E"] != null ? decimal.Parse(item["SUM_E"].ToString()) : 0;
-            if (item["TRANTYPE"]?.ToString() == "D") amount = -Math.Abs(amount);
+            decimal amount = 0;
+            if (item["SUM_E"] != null)
+            {
+                decimal.TryParse(item["SUM_E"]!.ToString(), out amount);
+            }
+            
+            if (item["TRANTYPE"]?.ToString() == "D") 
+            {
+                amount = -Math.Abs(amount);
+            }
 
             return new Transaction
             {
-                TransactionId = item["ID"]?.ToString(),
+                TransactionId = item["ID"]?.ToString() ?? Guid.NewGuid().ToString(),
                 Date = date,
                 Amount = amount,
                 Description = item["OSND"]?.ToString(),
