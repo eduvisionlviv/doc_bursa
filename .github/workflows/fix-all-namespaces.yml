@@ -1,30 +1,21 @@
 name: Apply Critical Patches
 
 on:
-  workflow_dispatch:  # Ручний запуск
+  workflow_dispatch:
     inputs:
       what_if:
         description: 'Тільки показати, що буде змінено (без застосування)'
         required: false
         default: 'false'
         type: boolean
-  
-  push:
-    branches:
-      - main
-    paths:
-      - 'scripts/enhance-project.ps1'
-      - '.github/workflows/fix-all-namespaces.yml'
 
 jobs:
   apply-patches:
-    runs-on: windows-latest  # Важливо: PowerShell скрипт для Windows
+    runs-on: windows-latest
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # Потрібно для commit/push
       
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -34,24 +25,29 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
       
+      - name: Create patches directory
+        shell: pwsh
+        run: New-Item -ItemType Directory -Path patches -Force | Out-Null
+      
       - name: Apply critical patches
         shell: pwsh
         run: |
-          Write-Host "🚀 Запуск скрипта enhance-project.ps1"
+          # Встановлюємо ErrorActionPreference на Continue, щоб не зупинятися на першій помилці
+          $ErrorActionPreference = "Continue"
           
-          # Перевірка наявності скрипта
+          Write-Host "🚀 Запуск скрипта enhance-project.ps1" -ForegroundColor Cyan
+          
           if (-not (Test-Path "scripts/enhance-project.ps1")) {
-            Write-Error "Скрипт scripts/enhance-project.ps1 не знайдено"
+            Write-Error "❌ Скрипт scripts/enhance-project.ps1 не знайдено"
             exit 1
           }
           
-          # Запуск скрипта
-          if ("${{ inputs.what_if }}" -eq "true") {
-            Write-Host "⚠️ Режим WhatIf (тільки перевірка)"
-            & "scripts/enhance-project.ps1" -WhatIf -Verbose
-          } else {
-            Write-Host "✅ Режим застосування патчів"
-            & "scripts/enhance-project.ps1" -Verbose
+          # Запускаємо скрипт і зберігаємо результат
+          & "scripts/enhance-project.ps1" -WhatIf:$${{ inputs.what_if }} -Verbose
+          
+          # Перевіряємо, чи скрипт завершився з помилками
+          if ($LASTEXITCODE -ne 0) {
+            Write-Warning "⚠️ Скрипт завершився з кодом $LASTEXITCODE, але продовжуємо"
           }
       
       - name: Check for changes
@@ -74,37 +70,33 @@ jobs:
         if: steps.check_changes.outputs.HAS_CHANGES == 'true' && inputs.what_if != 'true'
         shell: pwsh
         run: |
-          # Конфігурація git
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          # Створення commit
-          $commitMessage = @"
-          feat: критичні патчі для завершення основного функціоналу
+          git commit -m "feat: критичні патчі для завершення основного функціоналу
           
           - Розширений CSV Import з автовизначенням банків
           - ML.NET категоризація транзакцій
           - Розумна дедуплікація (Levenshtein)
           - Сповіщення про перевищення бюджету
           
-          Автоматично застосовано через GitHub Actions
-          "@
+          Автоматично застосовано через GitHub Actions"
           
-          git commit -m $commitMessage
-          
-          # Push змін
           git push
-          Write-Host "✅ Зміни успішно відправлено в репозиторій" -ForegroundColor Green
       
       - name: Upload patch artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: patches
-          path: patches/
+          path: |
+            patches/
+            *.log
           retention-days: 7
+          if-no-files-found: warn  # Не помилка, якщо немає файлів
       
       - name: Summary
+        if: always()
         shell: pwsh
         run: |
           Write-Host "`n📊 Підсумок виконання:" -ForegroundColor Cyan
@@ -114,12 +106,6 @@ jobs:
             Write-Host "✅ Зміни застосовано та відправлено в репозиторій" -ForegroundColor Green
           } elseif ("${{ inputs.what_if }}" -eq "true") {
             Write-Host "⚠️  Був запущений режим перевірки (WhatIf)" -ForegroundColor Yellow
-            Write-Host "   Щоб застосувати патчі, запустіть workflow з WhatIf=false" -ForegroundColor Yellow
           } else {
             Write-Host "ℹ️  Змін не виявлено (все вже застосовано)" -ForegroundColor Blue
           }
-          
-          Write-Host "`n📝 Наступні кроки:" -ForegroundColor Cyan
-          Write-Host "1. Перевірте зміни локально: git pull" -ForegroundColor White
-          Write-Host "2. Запустіть проект: dotnet run" -ForegroundColor White
-          Write-Host "3. Протестуйте CSV імпорт з різними банками" -ForegroundColor White
