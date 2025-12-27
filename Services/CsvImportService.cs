@@ -29,6 +29,18 @@ namespace FinDesk.Services
             GetEncodingSafe(1252)
         };
 
+        private static Encoding GetEncodingSafe(int codePage)
+        {
+            try
+            {
+                return Encoding.GetEncoding(codePage);
+            }
+            catch (Exception)
+            {
+                return new UTF8Encoding(false, true);
+            }
+        }
+
         private static readonly string[] _dateFormats =
         {
             "dd.MM.yyyy",
@@ -562,4 +574,3 @@ namespace FinDesk.Services
         public MappedCsvRow? Map(Dictionary<string, string> row) => _mapper(row);
     }
 }
-

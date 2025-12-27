@@ -114,6 +114,15 @@ namespace FinDesk.Services
             return result;
         }
 
+        public Dictionary<string, decimal> GetCategoryBreakdown(IEnumerable<Transaction> transactions)
+        {
+            if (transactions == null) throw new ArgumentNullException(nameof(transactions));
+
+            return transactions
+                .GroupBy(t => string.IsNullOrWhiteSpace(t.Category) ? "Не визначено" : t.Category)
+                .ToDictionary(g => g.Key, g => g.Sum(t => t.Amount));
+        }
+
         /// <summary>
         /// Отримати транзакції по місяцях
         /// </summary>
@@ -210,7 +219,7 @@ namespace FinDesk.Services
     // Класи для статистики
     public class AccountStatistics
     {
-        public string AccountNumber { get; set; }
+        public string AccountNumber { get; set; } = string.Empty;
         public int TotalTransactions { get; set; }
         public decimal TotalDebit { get; set; }
         public decimal TotalCredit { get; set; }
@@ -224,7 +233,7 @@ namespace FinDesk.Services
 
     public class GroupStatistics
     {
-        public string GroupName { get; set; }
+        public string GroupName { get; set; } = string.Empty;
         public int AccountCount { get; set; }
         public int TotalTransactions { get; set; }
         public decimal TotalDebit { get; set; }
@@ -245,7 +254,7 @@ namespace FinDesk.Services
 
     public class CounterpartyStatistics
     {
-        public string CounterpartyName { get; set; }
+        public string CounterpartyName { get; set; } = string.Empty;
         public decimal TotalAmount { get; set; }
         public int TransactionCount { get; set; }
         public decimal AverageAmount { get; set; }
@@ -254,11 +263,10 @@ namespace FinDesk.Services
 
     public class PeriodComparison
     {
-        public AccountStatistics Period1 { get; set; }
-        public AccountStatistics Period2 { get; set; }
+        public AccountStatistics Period1 { get; set; } = new();
+        public AccountStatistics Period2 { get; set; } = new();
         public decimal DebitGrowth { get; set; }
         public decimal CreditGrowth { get; set; }
         public decimal TransactionGrowth { get; set; }
     }
 }
-

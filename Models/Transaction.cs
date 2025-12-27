@@ -43,6 +43,9 @@ namespace FinDesk.Models
         [MaxLength(120)]
         public string Account { get; set; } = string.Empty;
 
+        [MaxLength(256)]
+        public string Counterparty { get; set; } = string.Empty;
+
         public decimal Balance { get; set; }
 
         public string Type => Amount >= 0 ? "Дохід" : "Витрата";
@@ -62,4 +65,3 @@ namespace FinDesk.Models
         public string OriginalTransactionId { get; set; } = string.Empty;
     }
 }
-

@@ -49,7 +49,7 @@ namespace FinDesk.ViewModels
             set => SetProperty(ref _averageDaily, value);
         }
 
-        private string _selectedPeriod;
+        private string _selectedPeriod = string.Empty;
         public string SelectedPeriod
         {
             get => _selectedPeriod;
@@ -200,7 +200,6 @@ namespace FinDesk.ViewModels
                 {
                     Name = cat.Name ?? "Невідомо",
                     Values = new[] { Math.Abs((double)cat.Amount) },
-                    DataLabelsPosition = PolarLabelsPosition.OutsideSlice,
                     DataLabelsSize = 12,
                     DataLabelsPaint = new SolidColorPaint(SKColors.Black)
                 })
@@ -245,4 +244,3 @@ namespace FinDesk.ViewModels
         }
     }
 }
-

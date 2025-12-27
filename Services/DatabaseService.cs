@@ -43,6 +43,7 @@ namespace FinDesk.Services
                     Description TEXT,
                     Category TEXT,
                     Source TEXT,
+                    Counterparty TEXT,
                     Account TEXT,
                     Balance REAL,
                     Hash TEXT UNIQUE,
@@ -112,6 +113,7 @@ namespace FinDesk.Services
             AddColumnIfMissing("Balance", "REAL");
             AddColumnIfMissing("IsDuplicate", "INTEGER DEFAULT 0");
             AddColumnIfMissing("OriginalTransactionId", "TEXT");
+            AddColumnIfMissing("Counterparty", "TEXT");
         }
 
         private static void EnsureBudgetTable(SqliteConnection connection)
@@ -150,8 +152,8 @@ namespace FinDesk.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO Transactions 
-                (TransactionId, Date, Amount, Description, Category, Source, Account, Balance, Hash, IsDuplicate, OriginalTransactionId)
-                VALUES ($tid, $date, $amount, $desc, $cat, $src, $account, $balance, $hash, $isDuplicate, $originalTid)
+                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId)
+                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid)
             ";
 
             command.Parameters.AddWithValue("$tid", transaction.TransactionId);
@@ -160,6 +162,7 @@ namespace FinDesk.Services
             command.Parameters.AddWithValue("$desc", transaction.Description ?? string.Empty);
             command.Parameters.AddWithValue("$cat", transaction.Category ?? "Інше");
             command.Parameters.AddWithValue("$src", transaction.Source ?? string.Empty);
+            command.Parameters.AddWithValue("$counterparty", transaction.Counterparty ?? string.Empty);
             command.Parameters.AddWithValue("$account", transaction.Account ?? string.Empty);
             command.Parameters.AddWithValue("$balance", transaction.Balance);
             command.Parameters.AddWithValue("$hash", transaction.Hash ?? string.Empty);
@@ -182,8 +185,8 @@ namespace FinDesk.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO Transactions 
-                (TransactionId, Date, Amount, Description, Category, Source, Account, Balance, Hash, IsDuplicate, OriginalTransactionId)
-                VALUES ($tid, $date, $amount, $desc, $cat, $src, $account, $balance, $hash, $isDuplicate, $originalTid)
+                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId)
+                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid)
             ";
 
             var tidParam = command.Parameters.Add("$tid", SqliteType.Text);
@@ -192,6 +195,7 @@ namespace FinDesk.Services
             var descParam = command.Parameters.Add("$desc", SqliteType.Text);
             var catParam = command.Parameters.Add("$cat", SqliteType.Text);
             var srcParam = command.Parameters.Add("$src", SqliteType.Text);
+            var counterpartyParam = command.Parameters.Add("$counterparty", SqliteType.Text);
             var accountParam = command.Parameters.Add("$account", SqliteType.Text);
             var balanceParam = command.Parameters.Add("$balance", SqliteType.Real);
             var hashParam = command.Parameters.Add("$hash", SqliteType.Text);
@@ -206,6 +210,7 @@ namespace FinDesk.Services
                 descParam.Value = transaction.Description ?? string.Empty;
                 catParam.Value = transaction.Category ?? "Інше";
                 srcParam.Value = transaction.Source ?? string.Empty;
+                counterpartyParam.Value = transaction.Counterparty ?? string.Empty;
                 accountParam.Value = transaction.Account ?? string.Empty;
                 balanceParam.Value = transaction.Balance;
                 hashParam.Value = transaction.Hash ?? string.Empty;
@@ -275,7 +280,7 @@ namespace FinDesk.Services
             }
 
             var whereClause = conditions.Any() ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
-            command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Account, Balance, Hash, IsDuplicate, OriginalTransactionId FROM Transactions {whereClause} ORDER BY Date DESC";
+            command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId FROM Transactions {whereClause} ORDER BY Date DESC";
 
             var transactions = new List<Transaction>();
             using var reader = command.ExecuteReader();
@@ -290,17 +295,23 @@ namespace FinDesk.Services
                     Description = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
                     Category = reader.IsDBNull(5) ? "Інше" : reader.GetString(5),
                     Source = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-                    Account = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
-                    Balance = reader.IsDBNull(8) ? 0 : (decimal)reader.GetDouble(8),
-                    Hash = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
-                    IsDuplicate = !reader.IsDBNull(10) && reader.GetInt32(10) == 1,
-                    OriginalTransactionId = reader.IsDBNull(11) ? string.Empty : reader.GetString(11)
+                    Counterparty = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+                    Account = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                    Balance = reader.IsDBNull(9) ? 0 : (decimal)reader.GetDouble(9),
+                    Hash = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
+                    IsDuplicate = !reader.IsDBNull(11) && reader.GetInt32(11) == 1,
+                    OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12)
                 };
 
                 transactions.Add(transaction);
             }
 
             return transactions;
+        }
+
+        public Task<List<Transaction>> GetTransactionsAsync(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, CancellationToken cancellationToken = default)
+        {
+            return Task.Run(() => GetTransactions(from, to, category, account), cancellationToken);
         }
 
         /// <summary>
@@ -349,7 +360,7 @@ namespace FinDesk.Services
             connection.Open();
 
             var command = connection.CreateCommand();
-            command.CommandText = @"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Account, Balance, Hash, IsDuplicate, OriginalTransactionId 
+            command.CommandText = @"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId 
                                     FROM Transactions WHERE TransactionId = $tid LIMIT 1";
             command.Parameters.AddWithValue("$tid", transactionId);
 
@@ -365,11 +376,12 @@ namespace FinDesk.Services
                     Description = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
                     Category = reader.IsDBNull(5) ? "Інше" : reader.GetString(5),
                     Source = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
-                    Account = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
-                    Balance = reader.IsDBNull(8) ? 0 : (decimal)reader.GetDouble(8),
-                    Hash = reader.IsDBNull(9) ? string.Empty : reader.GetString(9),
-                    IsDuplicate = !reader.IsDBNull(10) && reader.GetInt32(10) == 1,
-                    OriginalTransactionId = reader.IsDBNull(11) ? string.Empty : reader.GetString(11)
+                    Counterparty = reader.IsDBNull(7) ? string.Empty : reader.GetString(7),
+                    Account = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                    Balance = reader.IsDBNull(9) ? 0 : (decimal)reader.GetDouble(9),
+                    Hash = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
+                    IsDuplicate = !reader.IsDBNull(11) && reader.GetInt32(11) == 1,
+                    OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12)
                 };
             }
 
@@ -788,4 +800,3 @@ namespace FinDesk.Services
             => Task.Run(() => DeleteMasterGroup(id), cancellationToken);
     }
 }
-

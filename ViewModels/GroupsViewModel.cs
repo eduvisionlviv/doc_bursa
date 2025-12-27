@@ -16,11 +16,11 @@ namespace FinDesk.ViewModels
     public class GroupsViewModel : INotifyPropertyChanged
     {
         private readonly DatabaseService _databaseService;
-        private MasterGroup _selectedGroup;
-        private string _newGroupName;
+        private MasterGroup? _selectedGroup;
+        private string _newGroupName = string.Empty;
         private bool _isLoading;
-        private string _selectedAccount;
-        private string _selectedGroupAccount;
+        private string _selectedAccount = string.Empty;
+        private string _selectedGroupAccount = string.Empty;
 
         public ObservableCollection<MasterGroup> Groups { get; set; }
         public ObservableCollection<string> AvailableAccounts { get; set; }
@@ -50,7 +50,7 @@ namespace FinDesk.ViewModels
             }
         }
 
-        public MasterGroup SelectedGroup
+        public MasterGroup? SelectedGroup
         {
             get => _selectedGroup;
             set
