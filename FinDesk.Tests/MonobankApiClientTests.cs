@@ -117,6 +117,22 @@ namespace FinDesk.Tests
             Assert.Equal(HttpStatusCode.RequestTimeout, ex.StatusCode);
         }
 
+        [Fact]
+        public async Task CustomClientWithoutToken_AddsHeader()
+        {
+            var mockHttp = new MockHttpMessageHandler();
+            mockHttp.When(HttpMethod.Get, $"{_baseAddress}personal/client-info")
+                .WithHeaders("X-Token", Token)
+                .Respond("application/json", @"{ ""name"": ""Test User"", ""permissions"": ""ps"", ""accounts"": [] }");
+
+            var client = new HttpClient(mockHttp) { BaseAddress = _baseAddress };
+            var api = new MonobankApiClient(Token, client, CreateTestLogger(out _));
+
+            var result = await api.GetUserInfoAsync();
+
+            Assert.Equal("Test User", result.Name);
+        }
+
         private HttpClient CreateClient(HttpMessageHandler handler)
         {
             var client = new HttpClient(handler) { BaseAddress = _baseAddress };
