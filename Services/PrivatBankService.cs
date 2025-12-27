@@ -1,135 +1,111 @@
 using System;
 using System.Collections.Generic;
-using System.Net;
 using System.Net.Http;
-using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
-using System.Threading;
 using System.Threading.Tasks;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using doc_bursa.Models;
-using Polly;
-using Polly.Extensions.Http;
-using Polly.Timeout;
 
 namespace doc_bursa.Services
 {
     public class PrivatBankService
     {
-        private readonly HttpClient _httpClient;
-        private readonly IAsyncPolicy<HttpResponseMessage> _resiliencePolicy;
+        private const string BaseUrl = "https://acp.privatbank.ua/api";
 
-        public PrivatBankService()
+        public async Task<List<Transaction>> GetTransactionsAsync(string token, string clientId, DateTime from, DateTime to)
         {
-            _httpClient = new HttpClient
-            {
-                Timeout = TimeSpan.FromSeconds(30)
-            };
-            _resiliencePolicy = BuildPolicy();
-        }
+            var transactions = new List<Transaction>();
+            
+            // Якщо ClientId пустий, передаємо null, інакше додаємо параметр
+            string accParam = string.IsNullOrWhiteSpace(clientId) ? "" : $"&acc={clientId}";
+            string startDate = from.ToString("dd-MM-yyyy");
+            string endDate = to.ToString("dd-MM-yyyy");
 
-        public async Task<ApiResult<List<Transaction>>> FetchTransactionsAsync(string clientId, string clientSecret, DateTime from, DateTime to, CancellationToken cancellationToken = default)
-        {
-            try
+            using (var client = new HttpClient())
             {
-                var request = new
+                // Обов'язкові заголовки з документації
+                client.DefaultRequestHeaders.Add("token", token);
+                client.DefaultRequestHeaders.Add("User-Agent", "FinDesk Client");
+                client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
+
+                // Логіка пагінації (next_page_id)
+                string followId = null;
+                bool existNextPage = true;
+
+                while (existNextPage)
                 {
-                    merchant = new { id = clientId, signature = clientSecret },
-                    operation = "rest",
-                    payment = new
+                    var followParam = followId != null ? $"&followId={followId}" : "";
+                    string url = $"{BaseUrl}/statements/transactions?startDate={startDate}&endDate={endDate}&limit=100{accParam}{followParam}";
+
+                    var response = await client.GetAsync(url);
+                    
+                    if (!response.IsSuccessStatusCode)
                     {
-                        startDate = from.ToString("dd.MM.yyyy"),
-                        endDate = to.ToString("dd.MM.yyyy")
+                        var err = await response.Content.ReadAsStringAsync();
+                        throw new Exception($"Помилка API ПриватБанку ({response.StatusCode}): {err}");
                     }
-                };
 
-                var content = new StringContent(JsonSerializer.Serialize(request), Encoding.UTF8, "application/json");
-                var response = await _resiliencePolicy.ExecuteAsync(
-                    ct => _httpClient.PostAsync("https://api.privatbank.ua/p24api/rest_fiz", content, ct),
-                    cancellationToken);
+                    var json = await response.Content.ReadAsStringAsync();
+                    var data = JsonConvert.DeserializeObject<JObject>(json);
 
-                if (!response.IsSuccessStatusCode)
-                {
-                    var body = await response.Content.ReadAsStringAsync(cancellationToken);
-                    return ApiResult<List<Transaction>>.FromError(
-                        $"PrivatBank API error: {(int)response.StatusCode} {response.StatusCode}. {body}",
-                        response.StatusCode,
-                        new List<Transaction>());
-                }
-
-                var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var result = JsonSerializer.Deserialize<PrivatBankResponse>(json);
-
-                var transactions = new List<Transaction>();
-                foreach (var item in result?.data?.statements ?? new List<PrivatBankStatement>())
-                {
-                    var transaction = new Transaction
+                    if (data["status"]?.ToString() != "SUCCESS")
                     {
-                        TransactionId = item.orderReference ?? Guid.NewGuid().ToString(),
-                        Date = DateTime.ParseExact(item.transactionDate ?? DateTime.Now.ToString("dd.MM.yyyy"), "dd.MM.yyyy", null),
-                        Amount = decimal.Parse(item.amount ?? "0"),
-                        Description = item.description ?? "",
-                        Source = "PrivatBank"
-                    };
-                    transaction.Hash = ComputeHash(transaction);
-                    transactions.Add(transaction);
+                        throw new Exception($"API повернув помилку: {json}");
+                    }
+
+                    // Зчитуємо транзакції
+                    var transArray = data["transactions"] as JArray;
+                    if (transArray != null)
+                    {
+                        foreach (var item in transArray)
+                        {
+                            transactions.Add(MapTransaction(item));
+                        }
+                    }
+
+                    // Перевіряємо, чи є наступна сторінка
+                    existNextPage = (bool?)data["exist_next_page"] ?? false;
+                    followId = data["next_page_id"]?.ToString();
                 }
-
-                return ApiResult<List<Transaction>>.FromSuccess(transactions);
             }
-            catch (TaskCanceledException canceledEx) when (!cancellationToken.IsCancellationRequested)
+
+            return transactions;
+        }
+
+        private Transaction MapTransaction(JToken item)
+        {
+            // Парсинг дати. У документації формат: "dd.MM.yyyy HH:mm:ss" або "dd.MM.yyyy"
+            string dateStr = item["DATE_TIME_DAT_OD_TIM_P"]?.ToString() ?? item["DAT_OD"]?.ToString();
+            DateTime date;
+            
+            if (!DateTime.TryParse(dateStr, out date))
             {
-                return ApiResult<List<Transaction>>.FromError($"Таймаут PrivatBank: {canceledEx.Message}", null, new List<Transaction>());
+                date = DateTime.Now;
             }
-            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+
+            // Сума і тип (D - дебет/витрата, C - кредит/дохід)
+            decimal amount = item["SUM_E"] != null ? decimal.Parse(item["SUM_E"].ToString()) : 0;
+            string type = item["TRANTYPE"]?.ToString(); 
+
+            // Якщо це списання (D), робимо суму від'ємною
+            if (type == "D")
             {
-                throw;
+                amount = -Math.Abs(amount);
             }
-            catch (HttpRequestException httpEx)
+
+            return new Transaction
             {
-                return ApiResult<List<Transaction>>.FromError($"Помилка мережі PrivatBank: {httpEx.Message}", null, new List<Transaction>());
-            }
-            catch (Exception ex)
-            {
-                return ApiResult<List<Transaction>>.FromError($"Помилка PrivatBank: {ex.Message}", null, new List<Transaction>());
-            }
-        }
-
-        private static IAsyncPolicy<HttpResponseMessage> BuildPolicy()
-        {
-            var retry = HttpPolicyExtensions
-                .HandleTransientHttpError()
-                .OrResult(r => r.StatusCode == HttpStatusCode.TooManyRequests)
-                .WaitAndRetryAsync(3, retryAttempt => TimeSpan.FromSeconds(Math.Pow(2, retryAttempt)));
-
-            var timeout = Policy.TimeoutAsync<HttpResponseMessage>(TimeSpan.FromSeconds(30));
-            return Policy.WrapAsync(timeout, retry);
-        }
-
-        private string ComputeHash(Transaction t)
-        {
-            var data = $"{t.TransactionId}|{t.Date:O}|{t.Amount}|{t.Source}";
-            var bytes = SHA256.HashData(Encoding.UTF8.GetBytes(data));
-            return Convert.ToHexString(bytes);
-        }
-
-        private class PrivatBankResponse
-        {
-            public PrivatBankData? data { get; set; }
-        }
-
-        private class PrivatBankData
-        {
-            public List<PrivatBankStatement>? statements { get; set; }
-        }
-
-        private class PrivatBankStatement
-        {
-            public string? orderReference { get; set; }
-            public string? transactionDate { get; set; }
-            public string? amount { get; set; }
-            public string? description { get; set; }
+                TransactionId = item["ID"]?.ToString(),
+                Date = date,
+                Amount = amount,
+                Description = item["OSND"]?.ToString(), // Призначення
+                Counterparty = item["AUT_CNTR_NAM"]?.ToString(), // Контрагент
+                Account = item["AUT_MY_ACC"]?.ToString(), // Наш рахунок
+                Source = "PrivatBank",
+                Category = "Некатегоризовано",
+                Hash = $"{item["ID"]}_{item["REF"]}" // Унікальний хеш
+            };
         }
     }
 }
-
