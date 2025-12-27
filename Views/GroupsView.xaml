@@ -75,6 +75,32 @@
                                 Background="#DC3545" Foreground="White"
                                 Padding="10,6" FontSize="13" BorderThickness="0" Margin="0,0,0,15"/>
 
+                        <!-- Stats -->
+                        <Border Background="#F7F9FB" CornerRadius="6" Padding="10" Margin="0,0,0,15">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0">
+                                    <TextBlock Text="Баланс" FontWeight="SemiBold" Foreground="#607D8B"/>
+                                    <TextBlock Text="{Binding SelectedGroup.TotalBalance, StringFormat='{}{0:N2} ₴'}"
+                                               FontSize="18" FontWeight="Bold"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1">
+                                    <TextBlock Text="Дебет" FontWeight="SemiBold" Foreground="#4CAF50"/>
+                                    <TextBlock Text="{Binding SelectedGroup.TotalDebit, StringFormat='{}{0:N2} ₴'}"
+                                               FontSize="18" FontWeight="Bold"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="2">
+                                    <TextBlock Text="Кредит" FontWeight="SemiBold" Foreground="#F44336"/>
+                                    <TextBlock Text="{Binding SelectedGroup.TotalCredit, StringFormat='{}{0:N2} ₴'}"
+                                               FontSize="18" FontWeight="Bold"/>
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
                         <!-- Actions -->
                         <StackPanel Orientation="Horizontal">
                             <Button Content="Зберегти" Command="{Binding SaveGroupCommand}" 

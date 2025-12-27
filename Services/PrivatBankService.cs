@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
@@ -18,7 +19,7 @@ namespace FinDesk.Services
             _httpClient = new HttpClient();
         }
 
-        public async Task<List<Transaction>> FetchTransactionsAsync(string clientId, string clientSecret, DateTime from, DateTime to)
+        public async Task<ApiResult<List<Transaction>>> FetchTransactionsAsync(string clientId, string clientSecret, DateTime from, DateTime to)
         {
             try
             {
@@ -38,7 +39,11 @@ namespace FinDesk.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new Exception($"PrivatBank API error: {response.StatusCode}");
+                    var body = await response.Content.ReadAsStringAsync();
+                    return ApiResult<List<Transaction>>.FromError(
+                        $"PrivatBank API error: {(int)response.StatusCode} {response.StatusCode}. {body}",
+                        response.StatusCode,
+                        new List<Transaction>());
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
@@ -59,11 +64,19 @@ namespace FinDesk.Services
                     transactions.Add(transaction);
                 }
 
-                return transactions;
+                return ApiResult<List<Transaction>>.FromSuccess(transactions);
             }
-            catch
+            catch (HttpRequestException httpEx)
             {
-                return new List<Transaction>();
+                return ApiResult<List<Transaction>>.FromError($"Помилка мережі PrivatBank: {httpEx.Message}", null, new List<Transaction>());
+            }
+            catch (TaskCanceledException canceledEx)
+            {
+                return ApiResult<List<Transaction>>.FromError($"Таймаут PrivatBank: {canceledEx.Message}", null, new List<Transaction>());
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<List<Transaction>>.FromError($"Помилка PrivatBank: {ex.Message}", null, new List<Transaction>());
             }
         }
 

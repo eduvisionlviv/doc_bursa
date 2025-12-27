@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
@@ -42,6 +43,9 @@ namespace FinDesk.ViewModels
         [ObservableProperty]
         private string newSourceClientSecret = string.Empty;
 
+        [ObservableProperty]
+        private bool isBusy;
+
         public string[] AvailableTypes { get; } = { "Monobank", "PrivatBank", "Ukrsibbank", "CSV Import" };
 
         public SourcesViewModel()
@@ -57,8 +61,20 @@ namespace FinDesk.ViewModels
         [RelayCommand]
         private async Task LoadSources()
         {
-            var items = await _db.GetDataSourcesAsync();
-            Sources = new ObservableCollection<DataSource>(items);
+            try
+            {
+                IsBusy = true;
+                var items = await _db.GetDataSourcesAsync();
+                Sources = new ObservableCollection<DataSource>(items);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не вдалося завантажити джерела: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
         }
 
         [RelayCommand]
@@ -99,7 +115,8 @@ namespace FinDesk.ViewModels
 
             try
             {
-                await Task.Run(() => _db.AddDataSource(source));
+                IsBusy = true;
+                await _db.AddDataSourceAsync(source);
                 await LoadSources();
                 IsAddingSource = false;
 
@@ -108,6 +125,10 @@ namespace FinDesk.ViewModels
             catch (Exception ex)
             {
                 MessageBox.Show($"Не вдалося зберегти джерело: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsBusy = false;
             }
         }
 
@@ -129,17 +150,42 @@ namespace FinDesk.ViewModels
 
             if (result == MessageBoxResult.Yes)
             {
-                _db.DeleteDataSource(source.Id);
-                await LoadSources();
+                try
+                {
+                    IsBusy = true;
+                    await _db.DeleteDataSourceAsync(source.Id);
+                    await LoadSources();
+                    MessageBox.Show("Джерело видалено", "Готово", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Не вдалося видалити: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
+                finally
+                {
+                    IsBusy = false;
+                }
             }
         }
 
         [RelayCommand]
         private async Task ToggleSource(DataSource source)
         {
-            source.IsEnabled = !source.IsEnabled;
-            _db.UpdateDataSource(source);
-            await LoadSources();
+            try
+            {
+                IsBusy = true;
+                source.IsEnabled = !source.IsEnabled;
+                await _db.UpdateDataSourceAsync(source);
+                await LoadSources();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не вдалося оновити статус: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsBusy = false;
+            }
         }
 
         [RelayCommand]
@@ -147,6 +193,7 @@ namespace FinDesk.ViewModels
         {
             try
             {
+                IsBusy = true;
                 MessageBox.Show("Синхронізація запущена...", "Інформація", MessageBoxButton.OK, MessageBoxImage.Information);
 
                 // Тут буде виклик відповідного API
@@ -164,7 +211,7 @@ namespace FinDesk.ViewModels
                 }
 
                 source.LastSync = DateTime.Now;
-                _db.UpdateDataSource(source);
+                await _db.UpdateDataSourceAsync(source);
                 await LoadSources();
 
                 MessageBox.Show("Синхронізація завершена!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -172,6 +219,10 @@ namespace FinDesk.ViewModels
             catch (Exception ex)
             {
                 MessageBox.Show($"Помилка синхронізації: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+            finally
+            {
+                IsBusy = false;
             }
         }
 
@@ -212,7 +263,5 @@ namespace FinDesk.ViewModels
         }
     }
 }
-
-
 
 

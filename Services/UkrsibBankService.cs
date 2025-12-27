@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
@@ -19,7 +20,7 @@ namespace FinDesk.Services
             _httpClient.BaseAddress = new Uri("https://api.ukrsibbank.com");
         }
 
-        public async Task<List<Transaction>> FetchTransactionsAsync(string apiToken, DateTime from, DateTime to)
+        public async Task<ApiResult<List<Transaction>>> FetchTransactionsAsync(string apiToken, DateTime from, DateTime to)
         {
             try
             {
@@ -30,7 +31,11 @@ namespace FinDesk.Services
 
                 if (!response.IsSuccessStatusCode)
                 {
-                    throw new Exception($"Ukrsibbank API error: {response.StatusCode}");
+                    var body = await response.Content.ReadAsStringAsync();
+                    return ApiResult<List<Transaction>>.FromError(
+                        $"Ukrsibbank API error: {(int)response.StatusCode} {response.StatusCode}. {body}",
+                        response.StatusCode,
+                        new List<Transaction>());
                 }
 
                 var json = await response.Content.ReadAsStringAsync();
@@ -51,11 +56,19 @@ namespace FinDesk.Services
                     transactions.Add(transaction);
                 }
 
-                return transactions;
+                return ApiResult<List<Transaction>>.FromSuccess(transactions);
             }
-            catch
+            catch (HttpRequestException httpEx)
             {
-                return new List<Transaction>();
+                return ApiResult<List<Transaction>>.FromError($"Помилка мережі Ukrsibbank: {httpEx.Message}", null, new List<Transaction>());
+            }
+            catch (TaskCanceledException canceledEx)
+            {
+                return ApiResult<List<Transaction>>.FromError($"Таймаут Ukrsibbank: {canceledEx.Message}", null, new List<Transaction>());
+            }
+            catch (Exception ex)
+            {
+                return ApiResult<List<Transaction>>.FromError($"Помилка Ukrsibbank: {ex.Message}", null, new List<Transaction>());
             }
         }
 
