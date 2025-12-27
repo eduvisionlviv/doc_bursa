@@ -88,7 +88,7 @@ namespace doc_bursa.Services
                 {
                     NgramLength = 3,
                     UseAllLengths = true,
-                    MaximumNgramsCount = 4000
+                    MaximumNgramsCount = new int[] { 4000 } // Виправлено: передаємо масив
                 }
             };
 
