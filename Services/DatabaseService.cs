@@ -286,7 +286,6 @@ namespace doc_bursa.Services
             }
         }
 
-        // 👇 ТУТ ВИПРАВЛЕННЯ: Безпечне читання дати, щоб не вилітало
         public List<Transaction> GetTransactions(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -326,7 +325,6 @@ namespace doc_bursa.Services
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
-                // Захист: якщо дата бита, беремо MinValue замість крашу
                 DateTime dateVal;
                 var dateStr = reader.GetString(2);
                 if (!DateTime.TryParse(dateStr, out dateVal))
@@ -403,7 +401,6 @@ namespace doc_bursa.Services
             using var reader = command.ExecuteReader();
             if (reader.Read())
             {
-                // Також захищаємо від битої дати
                 DateTime dateVal;
                 var dateStr = reader.GetString(2);
                 if (!DateTime.TryParse(dateStr, out dateVal)) dateVal = DateTime.MinValue;
@@ -762,11 +759,12 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 UPDATE DataSources 
-                SET Type = $type, ApiToken = $token, ClientId = $cid, 
+                SET Name = $name, Type = $type, ApiToken = $token, ClientId = $cid, 
                     ClientSecret = $secret, IsEnabled = $enabled, LastSync = $sync
                 WHERE Id = $id
             ";
 
+            command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
             command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
@@ -800,11 +798,12 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 UPDATE DataSources 
-                SET Type = $type, ApiToken = $token, ClientId = $cid, 
+                SET Name = $name, Type = $type, ApiToken = $token, ClientId = $cid, 
                     ClientSecret = $secret, IsEnabled = $enabled, LastSync = $sync
                 WHERE Id = $id
             ";
 
+            command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
             command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
