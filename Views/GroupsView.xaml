@@ -61,15 +61,19 @@
                         <TextBlock Text="Рахунки в групі" FontSize="14" Margin="0,0,0,5"/>
                         <ComboBox ItemsSource="{Binding AvailableAccounts}" 
                                   SelectedItem="{Binding SelectedAccount}" 
-                                  DisplayMemberPath="AccountName" 
                                   Padding="8" FontSize="14" Margin="0,0,0,10"/>
                         <Button Content="Додати Рахунок" 
                                 Command="{Binding AddAccountToGroupCommand}" 
                                 Background="#28A745" Foreground="White" 
                                 Padding="10,6" FontSize="13" BorderThickness="0" Margin="0,0,0,15"/>
 
-                        <ListBox ItemsSource="{Binding SelectedGroup.Accounts}" 
-                                 DisplayMemberPath="AccountName" Height="150" Margin="0,0,0,15"/>
+                        <ListBox ItemsSource="{Binding SelectedGroup.AccountNumbers}" 
+                                 SelectedItem="{Binding SelectedGroupAccount}"
+                                 Height="150" Margin="0,0,0,10"/>
+                        <Button Content="Видалити рахунок"
+                                Command="{Binding RemoveAccountFromGroupCommand}"
+                                Background="#DC3545" Foreground="White"
+                                Padding="10,6" FontSize="13" BorderThickness="0" Margin="0,0,0,15"/>
 
                         <!-- Actions -->
                         <StackPanel Orientation="Horizontal">

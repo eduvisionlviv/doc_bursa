@@ -73,7 +73,7 @@ namespace FinDesk.ViewModels
         }
 
         [RelayCommand]
-        private async Task SaveSource()
+        private async Task SaveSourceAsync()
         {
             if (string.IsNullOrWhiteSpace(NewSourceName))
             {
@@ -97,11 +97,18 @@ namespace FinDesk.ViewModels
                 IsEnabled = true
             };
 
-            await _db.AddDataSourceAsync(source);
-            await LoadSources();
-            IsAddingSource = false;
+            try
+            {
+                await Task.Run(() => _db.AddDataSource(source));
+                await LoadSources();
+                IsAddingSource = false;
 
-            MessageBox.Show("Джерело даних додано успішно!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+                MessageBox.Show("Джерело даних додано успішно!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не вдалося зберегти джерело: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         [RelayCommand]
@@ -205,7 +212,6 @@ namespace FinDesk.ViewModels
         }
     }
 }
-
 
 
 
