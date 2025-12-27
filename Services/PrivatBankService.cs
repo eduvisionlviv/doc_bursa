@@ -7,12 +7,12 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
-using FinDesk.Models;
+using doc_bursa.Models;
 using Polly;
 using Polly.Extensions.Http;
 using Polly.Timeout;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     public class PrivatBankService
     {

@@ -1,6 +1,6 @@
 using System;
 
-namespace FinDesk.Models
+namespace doc_bursa.Models
 {
     public class DataSource
     {

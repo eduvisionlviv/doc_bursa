@@ -6,9 +6,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
-using FinDesk.Models;
+using doc_bursa.Models;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     public class ExportService
     {
@@ -99,43 +99,46 @@ namespace FinDesk.Services
 
         public Task<bool> ExportToExcelAsync(IEnumerable<ReportRow> rows, string filePath, ExportOptions options)
         {
-            try
+            return Task.Run(() =>
             {
-                var filtered = ApplyFilters(rows, options.Filters).ToList();
-                var columns = ResolveColumns(filtered, options.SelectedColumns);
-
-                using var workbook = new XLWorkbook();
-                var worksheet = workbook.AddWorksheet("Report");
-
-                for (var i = 0; i < columns.Count; i++)
+                try
                 {
-                    worksheet.Cell(1, i + 1).Value = columns[i];
-                }
+                    var filtered = ApplyFilters(rows, options.Filters).ToList();
+                    var columns = ResolveColumns(filtered, options.SelectedColumns);
 
-                for (var rowIndex = 0; rowIndex < filtered.Count; rowIndex++)
-                {
-                    var reportRow = filtered[rowIndex];
-                    for (var colIndex = 0; colIndex < columns.Count; colIndex++)
+                    using var workbook = new XLWorkbook();
+                    var worksheet = workbook.AddWorksheet("Report");
+
+                    for (var i = 0; i < columns.Count; i++)
                     {
-                        reportRow.Columns.TryGetValue(columns[colIndex], out var value);
-                        
-                        // Використовуємо типізований метод нормалізації
-                        var cellValue = NormalizeCellValue(value);
-                        
-                        // ClosedXML v0.100+ вимагає присвоєння через властивість Value (типу XLCellValue)
-                        worksheet.Cell(rowIndex + 2, colIndex + 1).Value = cellValue;
+                        worksheet.Cell(1, i + 1).Value = columns[i];
                     }
-                }
 
-                worksheet.Columns().AdjustToContents();
-                workbook.SaveAs(filePath);
-                return Task.FromResult(true);
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"Excel Export Error: {ex.Message}");
-                return Task.FromResult(false);
-            }
+                    for (var rowIndex = 0; rowIndex < filtered.Count; rowIndex++)
+                    {
+                        var reportRow = filtered[rowIndex];
+                        for (var colIndex = 0; colIndex < columns.Count; colIndex++)
+                        {
+                            reportRow.Columns.TryGetValue(columns[colIndex], out var value);
+                            
+                            // Використовуємо типізований метод нормалізації
+                            var cellValue = NormalizeCellValue(value);
+                            
+                            // ClosedXML v0.100+ вимагає присвоєння через властивість Value (типу XLCellValue)
+                            worksheet.Cell(rowIndex + 2, colIndex + 1).Value = cellValue;
+                        }
+                    }
+
+                    worksheet.Columns().AdjustToContents();
+                    workbook.SaveAs(filePath);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Excel Export Error: {ex.Message}");
+                    return false;
+                }
+            });
         }
 
         // Експорт у простий PDF (текстовий шаблон без зовнішніх залежностей)

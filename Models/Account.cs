@@ -2,7 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
-namespace FinDesk.Models
+namespace doc_bursa.Models
 {
     /// <summary>
     /// Банківський або фінансовий рахунок користувача.

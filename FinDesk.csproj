@@ -5,8 +5,8 @@
     <TargetFramework>net8.0-windows</TargetFramework>
     <Nullable>enable</Nullable>
     <UseWPF>true</UseWPF>
-    <RootNamespace>FinDesk</RootNamespace>
-    <AssemblyName>FinDesk</AssemblyName>
+    <RootNamespace>doc_bursa</RootNamespace>
+    <AssemblyName>doc_bursa</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

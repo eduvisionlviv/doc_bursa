@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     /// <summary>
     /// Проста реалізація LRU кешу для зберігання обмеженої кількості прогнозів.

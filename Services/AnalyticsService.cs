@@ -2,10 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Caching;
-using FinDesk.Models;
-using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     /// <summary>
     /// Сервіс для аналітики фінансових даних
@@ -14,7 +14,7 @@ namespace FinDesk.Services
     {
         private readonly DatabaseService _databaseService;
         private readonly MemoryCache _cache = MemoryCache.Default;
-        private readonly CacheItemPolicy _defaultPolicy = new() { SlidingExpiration = TimeSpan.FromMinutes(5) };
+        private readonly CacheItemPolicy _defaultPolicy = new() { SlidingExpiration = TimeSpan.FromMinutes(60) };
 
         public AnalyticsService(DatabaseService databaseService)
         {
@@ -26,6 +26,12 @@ namespace FinDesk.Services
         /// </summary>
         public AccountStatistics GetAccountStatistics(string accountNumber, DateTime? startDate = null, DateTime? endDate = null)
         {
+            var cacheKey = $"account-stats:{accountNumber}:{startDate?.ToString("o") ?? "null"}:{endDate?.ToString("o") ?? "null"}";
+            if (_cache.Get(cacheKey) is AccountStatistics cachedStats)
+            {
+                return cachedStats;
+            }
+
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
             
             if (startDate.HasValue)
@@ -48,6 +54,7 @@ namespace FinDesk.Services
                 LastTransactionDate = transactions.Any() ? transactions.Max(t => t.Date) : (DateTime?)null
             };
 
+            _cache.Set(cacheKey, stats, _defaultPolicy);
             return stats;
         }
 
@@ -58,6 +65,12 @@ namespace FinDesk.Services
         {
             if (group == null)
                 throw new ArgumentNullException(nameof(group));
+
+            var cacheKey = $"group-stats:{group.Name}:{startDate?.ToString("o") ?? "null"}:{endDate?.ToString("o") ?? "null"}";
+            if (_cache.Get(cacheKey) is GroupStatistics cachedStats)
+            {
+                return cachedStats;
+            }
 
             var allTransactions = new List<Transaction>();
             
@@ -84,6 +97,7 @@ namespace FinDesk.Services
                 AverageTransaction = allTransactions.Any() ? allTransactions.Average(t => Math.Abs(t.Amount)) : 0
             };
 
+            _cache.Set(cacheKey, stats, _defaultPolicy);
             return stats;
         }
 
@@ -158,6 +172,129 @@ namespace FinDesk.Services
             return monthlyStats;
         }
 
+        public List<TrendPoint> GetTrend(string accountNumber, TrendGranularity granularity, DateTime? from = null, DateTime? to = null)
+        {
+            var cacheKey = $"trend:{accountNumber}:{granularity}:{from?.ToString("o") ?? "null"}:{to?.ToString("o") ?? "null"}";
+            if (_cache.Get(cacheKey) is List<TrendPoint> cached)
+            {
+                return cached;
+            }
+
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            if (from.HasValue)
+                transactions = transactions.Where(t => t.Date >= from.Value).ToList();
+
+            if (to.HasValue)
+                transactions = transactions.Where(t => t.Date <= to.Value).ToList();
+
+            var grouped = granularity switch
+            {
+                TrendGranularity.Daily => transactions.GroupBy(t => t.Date.Date),
+                TrendGranularity.Weekly => transactions.GroupBy(t => FirstDayOfWeek(t.Date)),
+                _ => transactions.GroupBy(t => new DateTime(t.Date.Year, t.Date.Month, 1))
+            };
+
+            var trend = grouped
+                .OrderBy(g => g.Key)
+                .Select(g => new TrendPoint
+                {
+                    Label = granularity switch
+                    {
+                        TrendGranularity.Daily => g.Key.ToString("yyyy-MM-dd"),
+                        TrendGranularity.Weekly => $"{g.Key:yyyy-MM-dd}",
+                        _ => $"{g.Key:yyyy-MM}"
+                    },
+                    Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                    Expenses = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount)),
+                    Balance = g.Sum(t => t.Amount)
+                })
+                .ToList();
+
+            _cache.Set(cacheKey, trend, _defaultPolicy);
+            return trend;
+        }
+
+        public ForecastResult ForecastBalance(string accountNumber, TrendGranularity granularity, int periods = 3, DateTime? from = null, DateTime? to = null)
+        {
+            var trend = GetTrend(accountNumber, granularity, from, to);
+            if (trend.Count < 2)
+            {
+                return new ForecastResult { Points = Array.Empty<ForecastPoint>() };
+            }
+
+            var xs = Enumerable.Range(0, trend.Count).Select(i => (double)i).ToArray();
+            var ys = trend.Select(t => (double)t.Balance).ToArray();
+
+            var (slope, intercept) = LinearRegression(xs, ys);
+            var forecastPoints = new List<ForecastPoint>();
+
+            for (int i = 1; i <= periods; i++)
+            {
+                var index = trend.Count - 1 + i;
+                forecastPoints.Add(new ForecastPoint
+                {
+                    Index = index,
+                    PredictedBalance = intercept + slope * index
+                });
+            }
+
+            return new ForecastResult
+            {
+                Points = forecastPoints.ToArray(),
+                TrendSlope = slope
+            };
+        }
+
+        public List<Transaction> DetectAnomalies(string accountNumber, double threshold = 3.0, DateTime? from = null, DateTime? to = null)
+        {
+            var cacheKey = $"anomalies:{accountNumber}:{threshold}:{from?.ToString("o") ?? "null"}:{to?.ToString("o") ?? "null"}";
+            if (_cache.Get(cacheKey) is List<Transaction> cached)
+            {
+                return cached;
+            }
+
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            if (from.HasValue)
+                transactions = transactions.Where(t => t.Date >= from.Value).ToList();
+
+            if (to.HasValue)
+                transactions = transactions.Where(t => t.Date <= to.Value).ToList();
+
+            var amounts = transactions.Select(t => Math.Abs(t.Amount)).ToArray();
+            if (amounts.Length == 0)
+            {
+                return new List<Transaction>();
+            }
+
+            var mean = amounts.Average();
+            var variance = amounts.Select(a => Math.Pow((double)a - mean, 2)).Average();
+            var stdDev = Math.Sqrt(variance);
+
+            if (stdDev == 0)
+            {
+                return new List<Transaction>();
+            }
+
+            var anomalies = transactions.Where(t =>
+            {
+                var z = (Math.Abs(t.Amount) - (decimal)mean) / (decimal)stdDev;
+                return Math.Abs(z) >= (decimal)threshold;
+            }).ToList();
+
+            _cache.Set(cacheKey, anomalies, _defaultPolicy);
+            return anomalies;
+        }
+
+        public async Task WarmUpCacheAsync(string accountNumber, CancellationToken cancellationToken = default)
+        {
+            await Task.Run(() =>
+            {
+                _ = GetAccountStatistics(accountNumber);
+                _ = GetMonthlyStatistics(accountNumber, DateTime.UtcNow.Year);
+                _ = GetTrend(accountNumber, TrendGranularity.Monthly);
+            }, cancellationToken);
+        }
+
         /// <summary>
         /// Отримати топ контрагентів
         /// </summary>
@@ -214,6 +351,25 @@ namespace FinDesk.Services
             
             return ((newValue - oldValue) / oldValue) * 100;
         }
+
+        private static DateTime FirstDayOfWeek(DateTime dateTime)
+        {
+            var diff = (7 + (dateTime.DayOfWeek - DayOfWeek.Monday)) % 7;
+            return dateTime.Date.AddDays(-1 * diff);
+        }
+
+        private static (double Slope, double Intercept) LinearRegression(IReadOnlyList<double> xs, IReadOnlyList<double> ys)
+        {
+            var n = xs.Count;
+            var sumX = xs.Sum();
+            var sumY = ys.Sum();
+            var sumXY = xs.Zip(ys, (x, y) => x * y).Sum();
+            var sumX2 = xs.Sum(x => x * x);
+
+            var slope = (n * sumXY - sumX * sumY) / (n * sumX2 - Math.Pow(sumX, 2));
+            var intercept = (sumY - slope * sumX) / n;
+            return (slope, intercept);
+        }
     }
 
     // Класи для статистики
@@ -268,5 +424,32 @@ namespace FinDesk.Services
         public decimal DebitGrowth { get; set; }
         public decimal CreditGrowth { get; set; }
         public decimal TransactionGrowth { get; set; }
+    }
+
+    public enum TrendGranularity
+    {
+        Daily,
+        Weekly,
+        Monthly
+    }
+
+    public class TrendPoint
+    {
+        public string Label { get; set; } = string.Empty;
+        public decimal Income { get; set; }
+        public decimal Expenses { get; set; }
+        public decimal Balance { get; set; }
+    }
+
+    public class ForecastPoint
+    {
+        public int Index { get; set; }
+        public double PredictedBalance { get; set; }
+    }
+
+    public class ForecastResult
+    {
+        public ForecastPoint[] Points { get; set; } = Array.Empty<ForecastPoint>();
+        public double TrendSlope { get; set; }
     }
 }

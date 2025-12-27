@@ -5,15 +5,15 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.Input;
-using FinDesk.Models;
-using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
 using LiveChartsCore;
 using LiveChartsCore.Measure;
 using LiveChartsCore.SkiaSharpView;
 using LiveChartsCore.SkiaSharpView.Painting;
 using SkiaSharp;
 
-namespace FinDesk.ViewModels
+namespace doc_bursa.ViewModels
 {
     public class AnalyticsViewModel : ViewModelBase
     {
@@ -93,6 +93,20 @@ namespace FinDesk.ViewModels
         {
             get => _debitCreditAxes;
             set => SetProperty(ref _debitCreditAxes, value);
+        }
+
+        private ISeries[] _cashFlowSeries = Array.Empty<ISeries>();
+        public ISeries[] CashFlowSeries
+        {
+            get => _cashFlowSeries;
+            set => SetProperty(ref _cashFlowSeries, value);
+        }
+
+        private Axis[] _cashFlowAxes = new[] { new Axis { Labels = Array.Empty<string>() } };
+        public Axis[] CashFlowAxes
+        {
+            get => _cashFlowAxes;
+            set => SetProperty(ref _cashFlowAxes, value);
         }
 
         // Колекції
@@ -219,6 +233,42 @@ namespace FinDesk.ViewModels
                     Name = "Витрати",
                     Values = new[] { (double)TotalExpenses },
                     Fill = new SolidColorPaint(SKColors.OrangeRed)
+                }
+            };
+
+            var daily = filtered
+                .GroupBy(t => t.TransactionDate.Date)
+                .OrderBy(g => g.Key)
+                .Select(g => new
+                {
+                    Label = g.Key.ToString("dd.MM"),
+                    Income = g.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                    Expense = Math.Abs(g.Where(t => t.Amount < 0).Sum(t => t.Amount))
+                })
+                .ToList();
+
+            CashFlowAxes = new[]
+            {
+                new Axis { Labels = daily.Select(d => d.Label).ToArray(), LabelsRotation = 30 }
+            };
+
+            CashFlowSeries = new ISeries[]
+            {
+                new LineSeries<double>
+                {
+                    Name = "Дохід",
+                    Values = daily.Select(d => (double)d.Income).ToArray(),
+                    GeometrySize = 6,
+                    Fill = null,
+                    Stroke = new SolidColorPaint(SKColors.SeaGreen) { StrokeThickness = 2 }
+                },
+                new LineSeries<double>
+                {
+                    Name = "Витрати",
+                    Values = daily.Select(d => (double)d.Expense).ToArray(),
+                    GeometrySize = 6,
+                    Fill = null,
+                    Stroke = new SolidColorPaint(SKColors.OrangeRed) { StrokeThickness = 2 }
                 }
             };
         }

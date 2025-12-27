@@ -2,11 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
-using System.Text;
-using FinDesk.Services;
+using doc_bursa.Services;
 using Xunit;
 
-namespace FinDesk.Tests
+namespace doc_bursa.Tests
 {
     public class CsvImportServiceTests
     {

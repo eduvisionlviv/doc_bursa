@@ -5,10 +5,10 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using FinDesk.Models;
-using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
 
-namespace FinDesk.ViewModels
+namespace doc_bursa.ViewModels
 {
     /// <summary>
     /// ViewModel для управління майстер групами рахунків
@@ -59,6 +59,7 @@ namespace FinDesk.ViewModels
                 {
                     _selectedGroup = value;
                     OnPropertyChanged(nameof(SelectedGroup));
+                    CommandManager.InvalidateRequerySuggested();
                     LoadGroupDetails();
                 }
             }
@@ -73,6 +74,7 @@ namespace FinDesk.ViewModels
                 {
                     _newGroupName = value;
                     OnPropertyChanged(nameof(NewGroupName));
+                    CommandManager.InvalidateRequerySuggested();
                 }
             }
         }

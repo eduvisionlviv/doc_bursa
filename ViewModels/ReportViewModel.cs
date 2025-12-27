@@ -6,10 +6,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FinDesk.Models;
-using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
 
-namespace FinDesk.ViewModels
+namespace doc_bursa.ViewModels
 {
     public partial class ReportViewModel : ObservableObject
     {
