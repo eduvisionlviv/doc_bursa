@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Caching;
-using System.Threading;       // Додано
-using System.Threading.Tasks; // Додано
+using System.Threading;
+using System.Threading.Tasks;
 using doc_bursa.Models;
 using doc_bursa.Services;
 
@@ -268,8 +268,8 @@ namespace doc_bursa.Services
                 return new List<Transaction>();
             }
 
-            var mean = amounts.Average();
-            var variance = amounts.Select(a => Math.Pow((double)a - mean, 2)).Average();
+            var mean = amounts.Average(); // Returns decimal
+            var variance = amounts.Select(a => Math.Pow((double)a - (double)mean, 2)).Average(); // Виправлено: явне приведення mean до double
             var stdDev = Math.Sqrt(variance);
 
             if (stdDev == 0)
@@ -279,7 +279,7 @@ namespace doc_bursa.Services
 
             var anomalies = transactions.Where(t =>
             {
-                var z = (Math.Abs(t.Amount) - (decimal)mean) / (decimal)stdDev;
+                var z = (Math.Abs(t.Amount) - mean) / (decimal)stdDev;
                 return Math.Abs(z) >= (decimal)threshold;
             }).ToList();
 
