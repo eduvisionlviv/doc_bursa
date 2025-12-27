@@ -9,6 +9,7 @@
 
             <!-- Converters -->
             <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+            <converters:InverseBoolToVisibilityConverter x:Key="InverseBoolToVis"/>
             <converters:GreaterThanZeroConverter x:Key="GreaterThanZeroConverter"/>
 
             <!-- Navigation Button Style -->
