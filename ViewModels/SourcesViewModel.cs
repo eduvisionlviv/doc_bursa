@@ -26,17 +26,22 @@ namespace doc_bursa.ViewModels
         [ObservableProperty]
         private ObservableCollection<DataSource> sources = new();
 
+        // Ця властивість потрібна для редагування (зберігає те джерело, яке ми редагуємо)
         [ObservableProperty]
-        private DataSource? selectedSource; // Повернув властивість
+        private DataSource? selectedSource; 
 
         [ObservableProperty]
         private bool isAddingSource;
+
+        // Заголовок форми: "Нове джерело" або "Редагування"
+        [ObservableProperty]
+        private string formTitle = "Нове джерело";
 
         [ObservableProperty]
         private string newSourceName = string.Empty;
 
         [ObservableProperty]
-        private string newSourceType = "PrivatBank";
+        private string newSourceType = "PrivatBank"; // За замовчуванням Приват
 
         [ObservableProperty]
         private string newSourceToken = string.Empty;
@@ -78,9 +83,13 @@ namespace doc_bursa.ViewModels
             }
         }
 
+        // --- ДОДАВАННЯ ---
         [RelayCommand]
         private void StartAddSource()
         {
+            SelectedSource = null; // Це режим додавання, а не редагування
+            FormTitle = "Нове джерело";
+
             IsAddingSource = true;
             NewSourceName = "";
             NewSourceType = "PrivatBank";
@@ -88,12 +97,32 @@ namespace doc_bursa.ViewModels
             NewSourceClientId = "";
         }
 
+        // --- РЕДАГУВАННЯ (НОВЕ) ---
+        [RelayCommand]
+        private void StartEditSource(DataSource source)
+        {
+            if (source == null) return;
+
+            SelectedSource = source; // Запам'ятовуємо, що редагуємо
+            FormTitle = "Редагування джерела";
+
+            // Заповнюємо поля даними з вибраного джерела
+            NewSourceName = source.Name;
+            NewSourceType = source.Type;
+            NewSourceToken = source.ApiToken ?? "";
+            NewSourceClientId = source.ClientId ?? "";
+
+            IsAddingSource = true; // Відкриваємо форму
+        }
+
         [RelayCommand]
         private void CancelAdd()
         {
             IsAddingSource = false;
+            SelectedSource = null; // Скидаємо вибір
         }
 
+        // --- ЛОГІКА ЗБЕРЕЖЕННЯ (Оновлена) ---
         [RelayCommand]
         private async Task SaveSourceAsync()
         {
@@ -111,21 +140,38 @@ namespace doc_bursa.ViewModels
 
             IsBusy = true;
 
-            var source = new DataSource
-            {
-                Name = NewSourceName,
-                Type = NewSourceType,
-                ApiToken = NewSourceToken,
-                ClientId = NewSourceClientId,
-                IsEnabled = true
-            };
-
             try 
             {
-                await _db.AddDataSourceAsync(source);
-                await LoadSources();
-                IsAddingSource = false;
-                MessageBox.Show("Джерело збережено!", "Успіх");
+                if (SelectedSource != null)
+                {
+                    // === РЕДАГУВАННЯ ===
+                    SelectedSource.Name = NewSourceName;
+                    SelectedSource.Type = NewSourceType;
+                    SelectedSource.ApiToken = NewSourceToken;
+                    SelectedSource.ClientId = NewSourceClientId;
+
+                    // Оновлюємо в базі
+                    await _db.UpdateDataSourceAsync(SelectedSource);
+                    MessageBox.Show("Зміни збережено!", "Успіх");
+                }
+                else
+                {
+                    // === СТВОРЕННЯ НОВОГО ===
+                    var source = new DataSource
+                    {
+                        Name = NewSourceName,
+                        Type = NewSourceType,
+                        ApiToken = NewSourceToken,
+                        ClientId = NewSourceClientId,
+                        IsEnabled = true
+                    };
+                    await _db.AddDataSourceAsync(source);
+                    MessageBox.Show("Джерело додано!", "Успіх");
+                }
+
+                await LoadSources(); // Оновлюємо список на екрані
+                IsAddingSource = false; // Закриваємо форму
+                SelectedSource = null; // Скидаємо вибір
             }
             catch (Exception ex)
             {
@@ -147,7 +193,7 @@ namespace doc_bursa.ViewModels
             }
         }
 
-        // 👇 ПОВЕРНУВ МЕТОД TOGGLE (Вмикання/Вимикання джерела)
+        // --- ПОВЕРНУТИЙ МЕТОД TOGGLE ---
         [RelayCommand]
         private async Task ToggleSource(DataSource source)
         {
@@ -158,7 +204,6 @@ namespace doc_bursa.ViewModels
                 IsBusy = true;
                 source.IsEnabled = !source.IsEnabled;
                 await _db.UpdateDataSourceAsync(source);
-                // Оновлюємо список, щоб UI підхопив зміни
                 await LoadSources(); 
             }
             catch (Exception ex)
@@ -171,6 +216,7 @@ namespace doc_bursa.ViewModels
             }
         }
 
+        // --- ГОЛОВНА ЛОГІКА СИНХРОНІЗАЦІЇ ---
         [RelayCommand]
         private async Task SyncSource(DataSource source)
         {
@@ -189,9 +235,8 @@ namespace doc_bursa.ViewModels
                 }
                 else if (source.Type == "Monobank")
                 {
-                    // 👇 ПІДКЛЮЧИВ СЕРВІС МОНОБАНКУ (замість return)
+                    // 👇 ПІДКЛЮЧИВ СЕРВІС МОНОБАНКУ
                     var service = new MonobankService();
-                    // Для Моно "ClientId" - це номер рахунку (або "0" за замовчуванням)
                     transactions = await service.GetTransactionsAsync(source.ApiToken, source.ClientId, fromDate, toDate);
                 }
                 else if (source.Type == "Ukrsibbank")
@@ -225,6 +270,7 @@ namespace doc_bursa.ViewModels
             }
         }
 
+        // --- Імпорт файлів (залишаємо як є) ---
         [RelayCommand]
         private async Task ImportCsv()
         {
