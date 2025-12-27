@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
-namespace FinDesk.Converters
+namespace doc_bursa.Converters
 {
     public class InverseBoolToVisibilityConverter : IValueConverter
     {

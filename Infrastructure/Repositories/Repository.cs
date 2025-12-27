@@ -1,9 +1,9 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using FinDesk.Infrastructure.Data;
+using doc_bursa.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
 
-namespace FinDesk.Infrastructure.Repositories
+namespace doc_bursa.Infrastructure.Repositories
 {
     public class Repository<TEntity> : IRepository<TEntity> where TEntity : class
     {

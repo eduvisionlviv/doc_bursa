@@ -6,11 +6,11 @@ using System.Threading.Tasks;
 using System.Windows;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using FinDesk.Models;
-using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
 using Microsoft.Win32;
 
-namespace FinDesk.ViewModels
+namespace doc_bursa.ViewModels
 {
     public partial class SourcesViewModel : ObservableObject
     {

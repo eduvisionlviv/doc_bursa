@@ -7,7 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Serilog;
 
-namespace FinDesk.Infrastructure.ExternalApis.Monobank
+namespace doc_bursa.Infrastructure.ExternalApis.Monobank
 {
     public class MonobankApiClient
     {

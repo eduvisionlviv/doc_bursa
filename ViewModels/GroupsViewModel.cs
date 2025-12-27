@@ -5,10 +5,10 @@ using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using FinDesk.Models;
-using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
 
-namespace FinDesk.ViewModels
+namespace doc_bursa.ViewModels
 {
     /// <summary>
     /// ViewModel для управління майстер групами рахунків
