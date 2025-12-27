@@ -18,8 +18,8 @@ namespace doc_bursa.ViewModels
         private readonly CsvImportService _csvImport;
         private readonly CategorizationService _categorization;
         private readonly TransactionService _transactionService;
-                private readonly ExcelImportService _excelImport;
-                        private readonly ImportLogService _importLog;
+        private readonly ExcelImportService _excelImport;
+        private readonly ImportLogService _importLog;
 
         [ObservableProperty]
         private ObservableCollection<DataSource> sources = new();
@@ -57,8 +57,9 @@ namespace doc_bursa.ViewModels
             var deduplicationService = new DeduplicationService(_db);
             _transactionService = new TransactionService(_db, deduplicationService);
             _csvImport = new CsvImportService(_db, _categorization, _transactionService);
-                        _excelImport = new ExcelImportService(_db, _categorization, _transactionService);
-                                    _importLog = new ImportLogService();
+            _excelImport = new ExcelImportService(_db, _categorization, _transactionService);
+            _importLog = new ImportLogService();
+
             _ = LoadSources();
         }
 
@@ -123,7 +124,6 @@ namespace doc_bursa.ViewModels
                 await _db.AddDataSourceAsync(source, cancellationToken);
                 await LoadSources();
                 IsAddingSource = false;
-
                 MessageBox.Show("Джерело даних додано успішно!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
             }
             catch (OperationCanceledException)
@@ -254,6 +254,7 @@ namespace doc_bursa.ViewModels
                 else if (fileName.Contains("ukrsib")) bankType = "ukrsibbank";
 
                 var progress = new Progress<int>(_ => { }); // reserved for future UI progress binding
+
                 try
                 {
                     IsBusy = true;
@@ -262,9 +263,8 @@ namespace doc_bursa.ViewModels
                     if (result.Errors.Any())
                     {
                         var details = string.Join("\n", result.Errors.Take(5));
-
-                                            // Зберігаємо детальний лог
-                    await _importLog.SaveImportLogAsync(result, dialog.FileName);
+                        // Зберігаємо детальний лог
+                        await _importLog.SaveImportLogAsync(result, dialog.FileName);
                         MessageBox.Show($"Помилка імпорту: {details}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
                     }
 
@@ -283,9 +283,11 @@ namespace doc_bursa.ViewModels
                 {
                     IsBusy = false;
                 }
+            }
+        }
 
-                        [RelayCommand(IncludeCancelCommand = true)]
-                                private async Task ImportExcel(CancellationToken cancellationToken)
+        [RelayCommand(IncludeCancelCommand = true)]
+        private async Task ImportExcel(CancellationToken cancellationToken)
         {
             var dialog = new OpenFileDialog
             {
@@ -296,6 +298,7 @@ namespace doc_bursa.ViewModels
             if (dialog.ShowDialog() == true)
             {
                 var progress = new Progress<int>(_ => { });
+
                 try
                 {
                     IsBusy = true;
@@ -348,8 +351,6 @@ namespace doc_bursa.ViewModels
                 {
                     IsBusy = false;
                 }
-            }
-        }
             }
         }
     }
