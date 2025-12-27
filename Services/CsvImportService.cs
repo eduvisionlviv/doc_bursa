@@ -6,11 +6,11 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using FinDesk.Models;
+using doc_bursa.Models;
 using FluentValidation;
 using Serilog;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     public class CsvImportService
     {

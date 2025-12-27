@@ -4,11 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using FinDesk.Models;
+using doc_bursa.Models;
 using Microsoft.Data.Sqlite;
 using Serilog;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     /// <summary>
     /// Робота з локальною SQLite базою даних.

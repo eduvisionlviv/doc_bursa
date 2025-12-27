@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace FinDesk.Infrastructure.Repositories
+namespace doc_bursa.Infrastructure.Repositories
 {
     public interface IRepository<TEntity> where TEntity : class
     {

@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using FinDesk.Models;
+using doc_bursa.Models;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     /// <summary>
     /// Сервіс формування агрегованих звітів по транзакціях та бюджетах.

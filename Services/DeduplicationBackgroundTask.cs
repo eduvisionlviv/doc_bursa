@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using Serilog;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     /// <summary>
     /// Фонова задача періодичної перевірки дублікатів.
