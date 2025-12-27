@@ -18,7 +18,7 @@ namespace doc_bursa.ViewModels
         private readonly DatabaseService _db;
         private readonly TransactionService _transactionService;
         
-        // Сервіси імпорту файлів (залишаємо як було)
+        // Сервіси імпорту
         private readonly CsvImportService _csvImport;
         private readonly ExcelImportService _excelImport;
         private readonly ImportLogService _importLog;
@@ -27,13 +27,16 @@ namespace doc_bursa.ViewModels
         private ObservableCollection<DataSource> sources = new();
 
         [ObservableProperty]
+        private DataSource? selectedSource; // Повернув властивість
+
+        [ObservableProperty]
         private bool isAddingSource;
 
         [ObservableProperty]
         private string newSourceName = string.Empty;
 
         [ObservableProperty]
-        private string newSourceType = "PrivatBank"; // За замовчуванням Приват
+        private string newSourceType = "PrivatBank";
 
         [ObservableProperty]
         private string newSourceToken = string.Empty;
@@ -50,7 +53,7 @@ namespace doc_bursa.ViewModels
         {
             _db = new DatabaseService();
             
-            // Ініціалізація допоміжних сервісів
+            // Ініціалізація сервісів
             var catService = new CategorizationService(_db);
             var dedupService = new DeduplicationService(_db);
             _transactionService = new TransactionService(_db, dedupService);
@@ -64,8 +67,15 @@ namespace doc_bursa.ViewModels
         [RelayCommand]
         private async Task LoadSources()
         {
-            var items = await _db.GetDataSourcesAsync();
-            Sources = new ObservableCollection<DataSource>(items);
+            try 
+            {
+                var items = await _db.GetDataSourcesAsync();
+                Sources = new ObservableCollection<DataSource>(items);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Помилка завантаження: {ex.Message}", "Помилка");
+            }
         }
 
         [RelayCommand]
@@ -73,6 +83,7 @@ namespace doc_bursa.ViewModels
         {
             IsAddingSource = true;
             NewSourceName = "";
+            NewSourceType = "PrivatBank";
             NewSourceToken = "";
             NewSourceClientId = "";
         }
@@ -83,7 +94,6 @@ namespace doc_bursa.ViewModels
             IsAddingSource = false;
         }
 
-        // --- ЛОГІКА ЗБЕРЕЖЕННЯ ---
         [RelayCommand]
         private async Task SaveSourceAsync()
         {
@@ -106,7 +116,7 @@ namespace doc_bursa.ViewModels
                 Name = NewSourceName,
                 Type = NewSourceType,
                 ApiToken = NewSourceToken,
-                ClientId = NewSourceClientId, // Тут може бути номер рахунку для Привату
+                ClientId = NewSourceClientId,
                 IsEnabled = true
             };
 
@@ -137,7 +147,30 @@ namespace doc_bursa.ViewModels
             }
         }
 
-        // --- ГОЛОВНА ЛОГІКА СИНХРОНІЗАЦІЇ (РОЗДІЛЕНА) ---
+        // 👇 ПОВЕРНУВ МЕТОД TOGGLE (Вмикання/Вимикання джерела)
+        [RelayCommand]
+        private async Task ToggleSource(DataSource source)
+        {
+            if (source == null) return;
+
+            try
+            {
+                IsBusy = true;
+                source.IsEnabled = !source.IsEnabled;
+                await _db.UpdateDataSourceAsync(source);
+                // Оновлюємо список, щоб UI підхопив зміни
+                await LoadSources(); 
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Не вдалося змінити статус: {ex.Message}", "Помилка");
+            }
+            finally
+            {
+                IsBusy = false;
+            }
+        }
+
         [RelayCommand]
         private async Task SyncSource(DataSource source)
         {
@@ -146,32 +179,27 @@ namespace doc_bursa.ViewModels
                 IsBusy = true;
                 List<Transaction> transactions = new();
                 
-                // Період синхронізації (наприклад, останній місяць)
                 var toDate = DateTime.Now;
-                var fromDate = toDate.AddMonths(-1);
+                var fromDate = toDate.AddMonths(-1); // Останній місяць
 
-                // --- ТУТ МИ РОЗДІЛЯЄМО ЛОГІКУ ---
                 if (source.Type == "PrivatBank")
                 {
                     var service = new PrivatBankService();
-                    // Передаємо Токен і ClientId (як номер рахунку, якщо є)
                     transactions = await service.GetTransactionsAsync(source.ApiToken, source.ClientId, fromDate, toDate);
                 }
                 else if (source.Type == "Monobank")
                 {
+                    // 👇 ПІДКЛЮЧИВ СЕРВІС МОНОБАНКУ (замість return)
                     var service = new MonobankService();
-                    // MonobankService треба оновити, або використовувати старий, якщо він працює
-                    // transactions = await service.GetTransactionsAsync(...)
-                    MessageBox.Show("Monobank поки не налаштований у цьому коді.", "Інфо");
-                    return; 
+                    // Для Моно "ClientId" - це номер рахунку (або "0" за замовчуванням)
+                    transactions = await service.GetTransactionsAsync(source.ApiToken, source.ClientId, fromDate, toDate);
                 }
                 else if (source.Type == "Ukrsibbank")
                 {
-                     MessageBox.Show("Для УкрСиббанку використовуйте імпорт файлів CSV.", "Інфо");
+                     MessageBox.Show("Для УкрСиббанку використовуйте імпорт файлів CSV (кнопка зверху).", "Інфо");
                      return;
                 }
 
-                // Збереження отриманих транзакцій
                 if (transactions.Any())
                 {
                     await _transactionService.ImportTransactionsAsync(transactions, CancellationToken.None);
@@ -189,7 +217,7 @@ namespace doc_bursa.ViewModels
             }
             catch (Exception ex)
             {
-                MessageBox.Show($"Критична помилка синхронізації:\n{ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Помилка синхронізації:\n{ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
             }
             finally
             {
@@ -197,7 +225,6 @@ namespace doc_bursa.ViewModels
             }
         }
 
-        // --- Імпорт файлів (залишаємо як є) ---
         [RelayCommand]
         private async Task ImportCsv()
         {
