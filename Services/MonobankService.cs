@@ -38,12 +38,15 @@ namespace doc_bursa.Services
                 {
                     foreach (var m in monoData)
                     {
+                        // Пропускаємо, якщо немає ID
+                        if (string.IsNullOrEmpty(m.id)) continue;
+
                         result.Add(new Transaction
                         {
                             TransactionId = m.id,
                             Date = DateTimeOffset.FromUnixTimeSeconds(m.time).LocalDateTime,
                             Amount = m.amount / 100.0m,
-                            Description = m.description,
+                            Description = m.description ?? string.Empty,
                             Source = "Monobank",
                             Category = "Некатегоризовано",
                             Hash = $"{m.id}_{m.time}"
@@ -54,6 +57,13 @@ namespace doc_bursa.Services
             }
         }
 
-        private class MonoDto { public string id { get; set; } public long time { get; set; } public string description { get; set; } public long amount { get; set; } }
+        // DTO клас із підтримкою Nullable, щоб прибрати попередження
+        private class MonoDto 
+        { 
+            public string? id { get; set; } 
+            public long time { get; set; } 
+            public string? description { get; set; } 
+            public long amount { get; set; } 
+        }
     }
 }
