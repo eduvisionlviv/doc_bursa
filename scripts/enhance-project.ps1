@@ -2,43 +2,36 @@
 .SYNOPSIS
     Застосовує критичні патчі для завершення основного функціоналу FinDesk
 .DESCRIPTION
-    Розширює існуючі сервіси без створення нових файлів:
-    - CsvImportService: автовизначення формату банків
-    - CategorizationService: ML.NET категоризація
-    - DeduplicationService: розумна дедуплікація
-    - BudgetService: сповіщення про перевищення бюджету
+    Розширює існуючі сервіси без створення нових файлів
 .NOTES
     Запускати з кореня проекту: .\scripts\enhance-project.ps1
 #>
 
 param(
-    [switch]$WhatIf,  # Показати, що буде змінено, не застосовуючи
+    [switch]$WhatIf,
     [switch]$Verbose
 )
 
-$ErrorActionPreference = "Stop"
-$ProgressPreference = "SilentlyContinue"
+# Встановлюємо ErrorActionPreference на Continue, щоб не зупинятися на першій помилці
+$ErrorActionPreference = "Continue"
 
 Write-Host "🚀 FinDesk - Застосування критичних патчів" -ForegroundColor Cyan
 Write-Host "=============================================" -ForegroundColor Cyan
 
-# Перевірка наявності git
-if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
-    Write-Host "❌ Git не встановлено" -ForegroundColor Red
-    exit 1
-}
-
-# Перевірка, що ми в корені репозиторію
-if (-not (Test-Path ".git")) {
-    Write-Host "❌ Це не Git репозиторій. Перейдіть в директорію проекту" -ForegroundColor Red
-    exit 1
-}
-
-# Створення директорії для патчів
+# Створення директорії для патчів одразу
 $patchesDir = "patches"
 if (-not (Test-Path $patchesDir)) {
     New-Item -ItemType Directory -Path $patchesDir -Force | Out-Null
     Write-Host "📁 Створено директорію patches" -ForegroundColor Green
+}
+
+# Функція для логування помилок
+function Write-ErrorLog {
+    param([string]$Message)
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logMessage = "[$timestamp] ERROR: $Message"
+    Write-Host $logMessage -ForegroundColor Red
+    Add-Content -Path "patches/errors.log" -Value $logMessage
 }
 
 # Функція для застосування патча
@@ -52,27 +45,36 @@ function Apply-Patch {
     Write-Host "📝 $Description" -ForegroundColor Yellow
     
     if (-not (Test-Path $FilePath)) {
-        Write-Host "   ⚠️  Файл не знайдено: $FilePath" -ForegroundColor Yellow
+        $errorMsg = "Файл не знайдено: $FilePath"
+        Write-ErrorLog $errorMsg
         return $false
     }
     
     # Створення резервної копії
     $backupPath = "$FilePath.backup"
     if (-not (Test-Path $backupPath)) {
-        Copy-Item $FilePath $backupPath -Force
-        Write-Host "   💾 Резервна копія: $backupPath" -ForegroundColor Gray
+        try {
+            Copy-Item $FilePath $backupPath -Force
+            Write-Host "   💾 Резервна копія: $backupPath" -ForegroundColor Gray
+        } catch {
+            Write-ErrorLog "Не вдалося створити резервну копію: $_"
+        }
     }
     
     if ($WhatIf) {
-        Write-Host "   📋 Буде додано $($PatchContent.Split("`n").Count) рядків" -ForegroundColor Cyan
+        $lineCount = $PatchContent.Split("`n").Count
+        Write-Host "   📋 Буде додано $lineCount рядків" -ForegroundColor Cyan
         return $true
     }
     
-    # Додаємо патч в кінець файлу (для простоти)
-    # Для складніших патчів можна використовувати більш точну логіку
-    Add-Content -Path $FilePath -Value $PatchContent -Encoding UTF8
-    Write-Host "   ✅ Патч застосовано" -ForegroundColor Green
-    return $true
+    try {
+        Add-Content -Path $FilePath -Value $PatchContent -Encoding UTF8
+        Write-Host "   ✅ Патч застосовано" -ForegroundColor Green
+        return $true
+    } catch {
+        Write-ErrorLog "Помилка застосування патча: $_"
+        return $false
+    }
 }
 
 # === ПАТЧ 1: Розширений CSV Import ===
@@ -218,7 +220,7 @@ private decimal ParseAmount(string amountStr)
 private DateTime ParseDate(string dateStr, string[] formats)
 {
     foreach (var format in formats)
-       {
+    {
         if (DateTime.TryParseExact(dateStr, format, System.Globalization.CultureInfo.InvariantCulture, 
             System.Globalization.DateTimeStyles.None, out var date))
             return date;
@@ -227,19 +229,13 @@ private DateTime ParseDate(string dateStr, string[] formats)
         return fallbackDate;
     return DateTime.UtcNow;
 }
-
-// Модифікуйте ImportCsvAsync, щоб використовувати DetectBankFormatAsync
-// Приклад:
-// var bankFormat = await DetectBankFormatAsync(filePath);
-// if (bankFormat == null) return (0, 0, "Не вдалося визначити формат");
 "@
 
-Apply-Patch -FilePath "Services/CsvImportService.cs" -PatchContent $csvImportPatch -Description "Розширений CSV Import з автовизначенням банків"
+$null = Apply-Patch -FilePath "Services/CsvImportService.cs" -PatchContent $csvImportPatch -Description "Розширений CSV Import з автовизначенням банків"
 
 # === ПАТЧ 2: ML Категоризація (partial клас) ===
 Write-Host "`n=== ПАТЧ 2: ML Категоризація ===" -ForegroundColor Magenta
 
-# Створюємо partial файл для ML
 $mlFilePath = "Services/CategorizationService.ML.cs"
 if (-not (Test-Path $mlFilePath)) {
     $mlContent = @"
@@ -250,7 +246,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-+using System.Threading.Tasks;
+using System.Threading.Tasks;
 using FinDesk.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.ML;
@@ -266,16 +262,23 @@ namespace FinDesk.Services
 
         private async Task InitializeMLModelAsync()
         {
-            _mlContext = new MLContext(seed: 0);
-            
-            if (File.Exists(_modelPath))
+            try
             {
-                _mlModel = _mlContext.Model.Load(_modelPath, out _);
-                _logger.LogInformation("ML модель завантажено");
+                _mlContext = new MLContext(seed: 0);
+                
+                if (File.Exists(_modelPath))
+                {
+                    _mlModel = _mlContext.Model.Load(_modelPath, out _);
+                    _logger.LogInformation("ML модель завантажено");
+                }
+                else
+                {
+                    await TrainModelAsync();
+                }
             }
-            else
+            catch (Exception ex)
             {
-                await TrainModelAsync();
+                _logger.LogWarning(ex, "Не вдалося ініціалізувати ML модель, буде використано тільки правила");
             }
         }
 
@@ -300,120 +303,4 @@ namespace FinDesk.Services
 
                 var dataView = _mlContext.Data.LoadFromEnumerable(data);
                 var pipeline = _mlContext.Transforms.Text.FeaturizeText("Features", nameof(TransactionData.Description))
-                    .Append(_mlContext.MulticlassClassification.Trainers.SdcaMaximumEntropy())
-                    .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
-
-                _mlModel = pipeline.Fit(dataView);
-                
-                Directory.CreateDirectory(Path.GetDirectoryName(_modelPath));
-                _mlContext.Model.Save(_mlModel, dataView.Schema, _modelPath);
-                _logger.LogInformation($"ML модель навчено на {categorized.Count} транзакціях");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Помилка навчання ML моделі");
-            }
-        }
-
-        private async Task<Category> ApplyMLCategorizationAsync(string description)
-        {
-            if (_mlModel == null) return null;
-
-            try
-            {
-                var predictionEngine = _mlContext.Model.CreatePredictionEngine<TransactionData, CategoryPrediction>(_mlModel);
-                var input = new TransactionData { Description = description };
-                var prediction = predictionEngine.Predict(input);
-
-                if (prediction.Score.Max() > 0.6) // 60% впевненості
-                {
-                    var categories = await _dbService.GetCategoriesAsync();
-                    return categories.FirstOrDefault(c => c.Id == prediction.CategoryId);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "ML предикт не вдався");
-            }
-
-            return null;
-        }
-
-        private class TransactionData
-        {
-            public string Description { get; set; }
-+            public int CategoryId { get; set; }
-        }
-
-        private class CategoryPrediction
-        {
-            [ColumnName("PredictedLabel")]
-            public int CategoryId { get; set; }
-            public float[] Score { get; set; }
-        }
-    }
-}
-"@
-
-    if ($WhatIf) {
-        Write-Host "   📋 Буде створено файл: $mlFilePath" -ForegroundColor Cyan
-    } else {
-        Set-Content -Path $mlFilePath -Value $mlContent -Encoding UTF8
-        Write-Host "   ✅ Створено CategorizationService.ML.cs" -ForegroundColor Green
-    }
-} else {
-    Write-Host "   ⚠️  Файл вже існує: $mlFilePath" -ForegroundColor Yellow
-}
-
-# === ПАТЧ 3: Розумна дедуплікація ===
-Write-Host "`n=== ПАТЧ 3: Розумна дедуплікація ===" -ForegroundColor Magenta
-
-$dedupPatch = @"
-
-// === РОЗУМНА ДЕДУПЛІКАЦІЯ (додано 2025-12-27) ===
-
-// Алгоритм Левенштейна
-private int LevenshteinDistance(string s, string t)
-{
-    if (string.IsNullOrEmpty(s)) return t?.Length ?? 0;
-    if (string.IsNullOrEmpty(t)) return s.Length;
-
-    int[,] d = new int[s.Length + 1, t.Length + 1];
-
-    for (int i = 0; i <= s.Length; i++) d[i, 0] = i;
-    for (int j = 0; j <= t.Length; j++) d[0, j] = j;
-
-    for (int i = 1; i <= s.Length; i++)
-    {
-        for (int j = 1; j <= t.Length; j++)
-        {
-            int cost = (s[i - 1] == t[j - 1]) ? 0 : 1;
-            d[i, j] = Math.Min(
-                Math.Min(d[i - 1, j] + 1, d[i, j - 1] + 1),
-                d[i - 1, j - 1] + cost);
-        }
-    }
-
-    return d[s.Length, t.Length];
-}
-
-// Багатофакторна оцінка схожості
-private double GetSimilarityScore(Transaction a, Transaction b)
-{
-    if (a == null || b == null) return 0;
-
-    // 1. Схожість опису (50% ваги)
-    double descSimilarity = 1.0 - (double)LevenshteinDistance(a.Description, b.Description) / 
-                           Math.Max(a.Description.Length, b.Description.Length);
-    descSimilarity = Math.Max(0, descSimilarity);
-
-    // 2. Схожість суми (30% ваги)
-    double amountSimilarity = 1.0 - Math.Abs((double)(a.Amount - b.Amount)) / 
-                              Math.Max(Math.Abs((double)a.Amount), Math.Abs((double)b.Amount));
-    amountSimilarity = Math.Max(0, amountSimilarity);
-
-    // 3. Схожість дати (20% ваги)
-    int daysDiff = Math.Abs((a.Timestamp - b.Timestamp).Days);
-    double dateSimilarity = daysDiff <= 3 ? 1.0 : (daysDiff <= 7 ? 0.5 : 0);
-
-    return descSimilarity * 0.5 + amountSimilarity * 0.
+                    .Append(_mlContext.MulticlassClassification
