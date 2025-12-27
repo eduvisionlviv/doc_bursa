@@ -8,47 +8,48 @@
         </Grid.RowDefinitions>
 
         <TextBlock Text="Джерела даних" 
-                  FontSize="28" 
-                  FontWeight="SemiBold" 
-                  Margin="0,0,0,20"/>
+                   FontSize="28" 
+                   FontWeight="SemiBold" 
+                   Margin="0,0,0,20"/>
 
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
             <StackPanel>
                 <Border Style="{StaticResource CardStyle}" Margin="0,0,0,15">
                     <StackPanel>
                         <TextBlock Text="Імпорт CSV файлів" 
-                                  FontSize="18" 
-                                  FontWeight="SemiBold" 
-                                  Margin="0,0,0,15"/>
+                                   FontSize="18" 
+                                   FontWeight="SemiBold" 
+                                   Margin="0,0,0,15"/>
                         
                         <TextBlock Text="Підтримуються формати Monobank, PrivatBank, Ukrsibbank" 
-                                  TextWrapping="Wrap"
-                                  Margin="0,0,0,10"/>
+                                   TextWrapping="Wrap"
+                                   Margin="0,0,0,10"/>
                         
                         <Button Content="Імпортувати CSV файл" 
-                               Command="{Binding ImportCsvCommand}"
-                               HorizontalAlignment="Left"/>
-                    </StackPanel>
+                                Command="{Binding ImportCsvCommand}"
+                                HorizontalAlignment="Left"/>
 
-                <Button Command="{Binding ImportExcelCommand}"
-                        Margin="10,0,0,0"
-                        Padding="15,8"
-                        Background="#27AE60"
-                        Foreground="White"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        ToolTip="Імпорт транзакцій з Excel файлу (.xlsx)">
-                    <StackPanel Orientation="Horizontal">
-                        <TextBlock Text="📊" FontSize="16" Margin="0,0,5,0"/>
-                        <TextBlock Text="Імпорт Excel" VerticalAlignment="Center"/>
+                        <Button Command="{Binding ImportExcelCommand}"
+                                Margin="0,10,0,0"
+                                Padding="15,8"
+                                Background="#27AE60"
+                                Foreground="White"
+                                BorderThickness="0"
+                                Cursor="Hand"
+                                HorizontalAlignment="Left"
+                                ToolTip="Імпорт транзакцій з Excel файлу (.xlsx)">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="📊" FontSize="16" Margin="0,0,5,0"/>
+                                <TextBlock Text="Імпорт Excel" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Button>
                     </StackPanel>
-                </Button>
                 </Border>
 
                 <TextBlock Text="Налаштовані джерела даних" 
-                          FontSize="18" 
-                          FontWeight="SemiBold" 
-                          Margin="0,20,0,15"/>
+                           FontSize="18" 
+                           FontWeight="SemiBold" 
+                           Margin="0,20,0,15"/>
 
                 <ItemsControl ItemsSource="{Binding Sources}">
                     <ItemsControl.ItemTemplate>
@@ -62,30 +63,31 @@
 
                                     <StackPanel Orientation="Horizontal">
                                         <TextBlock Text="{Binding Name}" 
-                                                  FontSize="16" 
-                                                  FontWeight="SemiBold" 
-                                                  VerticalAlignment="Center"/>
+                                                   FontSize="16" 
+                                                   FontWeight="SemiBold" 
+                                                   VerticalAlignment="Center"/>
                                         <TextBlock Text="-" Margin="10,0"/>
                                         <TextBlock Text="{Binding Type}" 
-                                                  FontSize="14" 
-                                                  Foreground="Gray" 
-                                                  VerticalAlignment="Center"/>
+                                                   FontSize="14" 
+                                                   Foreground="Gray" 
+                                                   VerticalAlignment="Center"/>
                                     </StackPanel>
 
                                     <StackPanel Grid.Row="1" Margin="0,10,0,0">
                                         <TextBlock Text="{Binding LastSync, StringFormat='Остання синхронізація: {0:dd.MM.yyyy HH:mm}'}" 
-                                                  FontSize="12" 
-                                                  Foreground="Gray" 
-                                                  Margin="0,0,0,10"/>
+                                                   FontSize="12" 
+                                                   Foreground="Gray" 
+                                                   Margin="0,0,0,10"/>
 
                                         <StackPanel Orientation="Horizontal">
                                             <Button Content="Синхронізувати" 
-                                                   Command="{Binding DataContext.SyncSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" 
-                                                   CommandParameter="{Binding}"
-                                                   Margin="0,0,10,0"/>
+                                                    Command="{Binding DataContext.SyncSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" 
+                                                    CommandParameter="{Binding}"
+                                                    Margin="0,0,10,0"/>
+
                                             <Button Content="Видалити" 
-                                                   Command="{Binding DataContext.DeleteSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" 
-                                                   CommandParameter="{Binding}"/>
+                                                    Command="{Binding DataContext.DeleteSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" 
+                                                    CommandParameter="{Binding}"/>
                                         </StackPanel>
                                     </StackPanel>
                                 </Grid>
@@ -94,38 +96,39 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <Border Style="{StaticResource CardStyle}" Margin="0,20,0,0" Visibility="{Binding IsAddingSource, Converter={StaticResource BoolToVisConverter}}">
+                <Border Style="{StaticResource CardStyle}" Margin="0,20,0,0" Visibility="{Binding IsAddingSource, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
                         <TextBlock Text="Додати нове джерело" 
-                                  FontSize="18" 
-                                  FontWeight="SemiBold" 
-                                  Margin="0,0,0,15"/>
+                                   FontSize="18" 
+                                   FontWeight="SemiBold" 
+                                   Margin="0,0,0,15"/>
 
                         <TextBlock Text="Назва:" Margin="0,0,0,5"/>
                         <TextBox Text="{Binding NewSourceName}" Margin="0,0,0,10"/>
 
                         <TextBlock Text="Тип:" Margin="0,0,0,5"/>
                         <ComboBox ItemsSource="{Binding AvailableTypes}" 
-                                 SelectedItem="{Binding NewSourceType}" 
-                                 Margin="0,0,0,10"/>
+                                  SelectedItem="{Binding NewSourceType}" 
+                                  Margin="0,0,0,10"/>
 
                         <TextBlock Text="API Токен:" Margin="0,0,0,5"/>
                         <TextBox Text="{Binding NewSourceToken}" Margin="0,0,0,10"/>
 
                         <StackPanel Orientation="Horizontal">
                             <Button Content="Зберегти" 
-                                   Command="{Binding SaveSourceAsyncCommand}" 
-                                   Margin="0,0,10,0"/>
+                                    Command="{Binding SaveSourceAsyncCommand}" 
+                                    Margin="0,0,10,0"/>
+
                             <Button Content="Скасувати" 
-                                   Command="{Binding CancelAddCommand}"/>
+                                    Command="{Binding CancelAddCommand}"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
 
                 <Button Content="+ Додати джерело" 
-                       Command="{Binding StartAddSourceCommand}" 
-                       Margin="0,15,0,0"
-                       Visibility="{Binding IsAddingSource, Converter={StaticResource InverseBoolToVisConverter}}"/>
+                        Command="{Binding StartAddSourceCommand}" 
+                        Margin="0,15,0,0"
+                        Visibility="{Binding IsAddingSource, Converter={StaticResource InverseBoolToVis}}"/>
             </StackPanel>
         </ScrollViewer>
     </Grid>
