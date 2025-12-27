@@ -11,10 +11,8 @@ namespace FinDesk.Models
         public string Description { get; set; } = string.Empty;
         public string Category { get; set; } = "Інше";
         public string Source { get; set; } = string.Empty;
+        [System.ComponentModel.DataAnnotations.Schema.NotMapped]
         public string Type => Amount >= 0 ? "Дохід" : "Витрата";
         public string Hash { get; set; } = string.Empty;
     }
 }
-
-
-
