@@ -79,6 +79,11 @@ namespace doc_bursa.Services
                 return prepared.Count;
             }, cancellationToken);
         }
+
+        // 👇 ЦЕЙ МЕТОД БУВ ВІДСУТНІЙ, АЛЕ ВИКЛИКАВСЯ В SOURCESVIEWMODEL
+        public Task<int> ImportTransactionsAsync(IEnumerable<Transaction> transactions, CancellationToken cancellationToken = default)
+        {
+            return AddTransactionsBatchAsync(transactions, cancellationToken);
+        }
     }
 }
-
