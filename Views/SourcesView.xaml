@@ -100,7 +100,7 @@
 
                         <StackPanel Orientation="Horizontal">
                             <Button Content="Зберегти" 
-                                   Command="{Binding SaveSourceCommand}" 
+                                   Command="{Binding SaveSourceAsyncCommand}" 
                                    Margin="0,0,10,0"/>
                             <Button Content="Скасувати" 
                                    Command="{Binding CancelAddCommand}"/>

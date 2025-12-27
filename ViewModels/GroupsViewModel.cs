@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using FinDesk.Models;
 using FinDesk.Services;
-using FinDesk.Services;
 
 namespace FinDesk.ViewModels
 {
@@ -20,9 +19,36 @@ namespace FinDesk.ViewModels
         private MasterGroup _selectedGroup;
         private string _newGroupName;
         private bool _isLoading;
+        private string _selectedAccount;
+        private string _selectedGroupAccount;
 
         public ObservableCollection<MasterGroup> Groups { get; set; }
         public ObservableCollection<string> AvailableAccounts { get; set; }
+        public string SelectedAccount
+        {
+            get => _selectedAccount;
+            set
+            {
+                if (_selectedAccount != value)
+                {
+                    _selectedAccount = value;
+                    OnPropertyChanged(nameof(SelectedAccount));
+                }
+            }
+        }
+
+        public string SelectedGroupAccount
+        {
+            get => _selectedGroupAccount;
+            set
+            {
+                if (_selectedGroupAccount != value)
+                {
+                    _selectedGroupAccount = value;
+                    OnPropertyChanged(nameof(SelectedGroupAccount));
+                }
+            }
+        }
 
         public MasterGroup SelectedGroup
         {
@@ -76,15 +102,21 @@ namespace FinDesk.ViewModels
             
             Groups = new ObservableCollection<MasterGroup>();
             AvailableAccounts = new ObservableCollection<string>();
+            SelectedAccount = string.Empty;
+            SelectedGroupAccount = string.Empty;
 
             CreateGroupCommand = new RelayCommand(async () => await CreateGroupAsync(), () => !string.IsNullOrWhiteSpace(NewGroupName));
             DeleteGroupCommand = new RelayCommand(async () => await DeleteGroupAsync(), () => SelectedGroup != null);
-            AddAccountToGroupCommand = new RelayCommand<string>(async (account) => await AddAccountToGroupAsync(account));
-            RemoveAccountFromGroupCommand = new RelayCommand<string>(async (account) => await RemoveAccountFromGroupAsync(account));
+            AddAccountToGroupCommand = new RelayCommand(async () => await AddAccountToGroupAsync());
+            RemoveAccountFromGroupCommand = new RelayCommand(async () => await RemoveAccountFromGroupAsync(SelectedGroupAccount));
             SaveGroupCommand = new RelayCommand(async () => await SaveGroupAsync(), () => SelectedGroup != null);
 
             _ = LoadGroupsAsync();
             _ = LoadAvailableAccountsAsync();
+        }
+
+        public GroupsViewModel() : this(new DatabaseService())
+        {
         }
 
         private async Task LoadGroupsAsync()
@@ -211,16 +243,16 @@ namespace FinDesk.ViewModels
             }
         }
 
-        private async Task AddAccountToGroupAsync(string accountNumber)
+        private async Task AddAccountToGroupAsync()
         {
-            if (SelectedGroup == null || string.IsNullOrWhiteSpace(accountNumber))
+            if (SelectedGroup == null || string.IsNullOrWhiteSpace(SelectedAccount))
                 return;
 
             await Task.Run(() =>
             {
                 App.Current.Dispatcher.Invoke(() =>
                 {
-                    SelectedGroup.AddAccount(accountNumber);
+                    SelectedGroup.AddAccount(SelectedAccount);
                 });
             });
         }
