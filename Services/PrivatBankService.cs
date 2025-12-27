@@ -86,9 +86,10 @@ namespace doc_bursa.Services
                 TransactionId = item["ID"]?.ToString() ?? Guid.NewGuid().ToString(),
                 Date = date,
                 Amount = amount,
-                Description = item["OSND"]?.ToString(),
-                Counterparty = item["AUT_CNTR_NAM"]?.ToString(),
-                Account = item["AUT_MY_ACC"]?.ToString(),
+                // 👇 ВИПРАВЛЕНО: Додано перевірку на null (?? string.Empty)
+                Description = item["OSND"]?.ToString() ?? string.Empty,
+                Counterparty = item["AUT_CNTR_NAM"]?.ToString() ?? string.Empty,
+                Account = item["AUT_MY_ACC"]?.ToString() ?? string.Empty,
                 Source = "PrivatBank",
                 Category = "Некатегоризовано",
                 Hash = $"{item["ID"]}_{item["REF"]}"
