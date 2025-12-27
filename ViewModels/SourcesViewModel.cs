@@ -51,13 +51,14 @@ namespace FinDesk.ViewModels
             var deduplicationService = new DeduplicationService(_db);
             _transactionService = new TransactionService(_db, deduplicationService);
             _csvImport = new CsvImportService(_db, _categorization, _transactionService);
-            LoadSources();
+            _ = LoadSources();
         }
 
         [RelayCommand]
-        private void LoadSources()
+        private async Task LoadSources()
         {
-            Sources = new ObservableCollection<DataSource>(_db.GetDataSources());
+            var items = await _db.GetDataSourcesAsync();
+            Sources = new ObservableCollection<DataSource>(items);
         }
 
         [RelayCommand]
@@ -96,7 +97,7 @@ namespace FinDesk.ViewModels
                 IsEnabled = true
             };
 
-            await _db.AddDataSource(source);
+            await _db.AddDataSourceAsync(source);
             await LoadSources();
             IsAddingSource = false;
 
@@ -110,7 +111,7 @@ namespace FinDesk.ViewModels
         }
 
         [RelayCommand]
-        private void DeleteSource(DataSource source)
+        private async Task DeleteSource(DataSource source)
         {
             var result = MessageBox.Show(
                 $"Видалити джерело '{source.Name}'?",
@@ -122,50 +123,50 @@ namespace FinDesk.ViewModels
             if (result == MessageBoxResult.Yes)
             {
                 _db.DeleteDataSource(source.Id);
-                LoadSources();
+                await LoadSources();
             }
         }
 
         [RelayCommand]
-        private void ToggleSource(DataSource source)
+        private async Task ToggleSource(DataSource source)
         {
             source.IsEnabled = !source.IsEnabled;
             _db.UpdateDataSource(source);
-            LoadSources();
+            await LoadSources();
         }
 
-[RelayCommand]
-private void SyncSource(DataSource source)
-{
-    try
-    {
-        MessageBox.Show("Синхронізація запущена...", "Інформація", MessageBoxButton.OK, MessageBoxImage.Information);
-        
-        // Тут буде виклик відповідного API
-        switch (source.Type)
+        [RelayCommand]
+        private async Task SyncSource(DataSource source)
         {
-            case "Monobank":
-                // await SyncMonobank(source);
-                break;
-            case "PrivatBank":
-                // await SyncPrivatBank(source);
-                break;
-            case "Ukrsibbank":
-                // await SyncUkrsibbank(source);
-                break;
+            try
+            {
+                MessageBox.Show("Синхронізація запущена...", "Інформація", MessageBoxButton.OK, MessageBoxImage.Information);
+
+                // Тут буде виклик відповідного API
+                switch (source.Type)
+                {
+                    case "Monobank":
+                        // await SyncMonobank(source);
+                        break;
+                    case "PrivatBank":
+                        // await SyncPrivatBank(source);
+                        break;
+                    case "Ukrsibbank":
+                        // await SyncUkrsibbank(source);
+                        break;
+                }
+
+                source.LastSync = DateTime.Now;
+                _db.UpdateDataSource(source);
+                await LoadSources();
+
+                MessageBox.Show("Синхронізація завершена!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Помилка синхронізації: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
-
-        source.LastSync = DateTime.Now;
-        _db.UpdateDataSource(source);
-        LoadSources();
-
-        MessageBox.Show("Синхронізація завершена!", "Успіх", MessageBoxButton.OK, MessageBoxImage.Information);
-    }
-    catch (Exception ex)
-    {
-        MessageBox.Show($"Помилка синхронізації: {ex.Message}", "Помилка", MessageBoxButton.OK, MessageBoxImage.Error);
-    }
-}
 
         [RelayCommand]
         private void ImportCsv()
