@@ -6,7 +6,6 @@
              xmlns:vm="clr-namespace:doc_bursa.ViewModels"
              mc:Ignorable="d" 
              d:DesignHeight="600" d:DesignWidth="800">
-    
     <UserControl.DataContext>
         <vm:SourcesViewModel/>
     </UserControl.DataContext>
@@ -42,18 +41,26 @@
                                     <StackPanel>
                                         <StackPanel Orientation="Horizontal">
                                             <TextBlock Text="{Binding Name}" FontSize="18" FontWeight="SemiBold" Foreground="White"/>
-                                            <TextBlock Text="{Binding Type}" Foreground="#BDC3C7" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                                            <Border Background="#2C3E50" CornerRadius="4" Padding="6,2" Margin="10,0,0,0">
+                                                <TextBlock Text="{Binding Type}" FontSize="12" Foreground="#BDC3C7"/>
+                                            </Border>
                                         </StackPanel>
-                                        <TextBlock Text="{Binding ClientId, StringFormat='Рахунок: {0}'}" Foreground="Gray"/>
+                                        <TextBlock Text="{Binding ClientId, StringFormat='Рахунок: {0}'}" Foreground="Gray" Margin="0,5,0,0"/>
                                         <TextBlock Text="{Binding LastSync, StringFormat='Оновлено: {0:dd.MM.yyyy HH:mm}'}" Foreground="Gray"/>
                                     </StackPanel>
 
                                     <StackPanel Grid.Column="1" Orientation="Horizontal">
-                                        <Button Content="Синхронізувати" 
+                                        <Button Content="🔄" ToolTip="Синхронізувати"
                                                 Command="{Binding DataContext.SyncSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" 
                                                 CommandParameter="{Binding}"
-                                                Style="{StaticResource NavButtonStyle}" Margin="0,0,10,0"/>
-                                        <Button Content="Видалити" 
+                                                Style="{StaticResource NavButtonStyle}" Margin="0,0,5,0"/>
+                                        
+                                        <Button Content="✏️" ToolTip="Редагувати"
+                                                Command="{Binding DataContext.StartEditSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource NavButtonStyle}" Background="#F39C12" Foreground="White" Margin="0,0,5,0"/>
+
+                                        <Button Content="🗑️" ToolTip="Видалити"
                                                 Command="{Binding DataContext.DeleteSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding}"
                                                 Style="{StaticResource DangerButtonStyle}"/>
@@ -69,9 +76,9 @@
         <Border Background="#1F2937" CornerRadius="8" Padding="30" VerticalAlignment="Center" HorizontalAlignment="Center"
                 Visibility="{Binding IsAddingSource, Converter={StaticResource BoolToVis}}" Width="500">
             <StackPanel>
-                <TextBlock Text="Нове джерело" FontSize="20" FontWeight="Bold" Foreground="White" Margin="0,0,0,20"/>
+                <TextBlock Text="{Binding FormTitle}" FontSize="20" FontWeight="Bold" Foreground="White" Margin="0,0,0,20"/>
 
-                <TextBlock Text="Назва" Foreground="Gray"/>
+                <TextBlock Text="Назва (для себе)" Foreground="Gray"/>
                 <TextBox Text="{Binding NewSourceName, UpdateSourceTrigger=PropertyChanged}" 
                          Padding="10" Margin="0,5,0,15"/>
 
@@ -79,13 +86,15 @@
                 <ComboBox ItemsSource="{Binding AvailableTypes}" SelectedItem="{Binding NewSourceType}" 
                           Padding="10" Margin="0,5,0,15"/>
 
-                <TextBlock Text="API Токен (AutoClient)" Foreground="Gray"/>
-                <TextBox Text="{Binding NewSourceToken, UpdateSourceTrigger=PropertyChanged}" 
-                         Padding="10" Margin="0,5,0,15"/>
+                <StackPanel Visibility="{Binding NewSourceType, Converter={StaticResource InverseBoolToVis}, ConverterParameter=CSV Import}">
+                    <TextBlock Text="API Токен" Foreground="Gray"/>
+                    <TextBox Text="{Binding NewSourceToken, UpdateSourceTrigger=PropertyChanged}" 
+                             Padding="10" Margin="0,5,0,15"/>
 
-                <TextBlock Text="Номер рахунку (IBAN або ID, не обов'язково)" Foreground="Gray"/>
-                <TextBox Text="{Binding NewSourceClientId, UpdateSourceTrigger=PropertyChanged}" 
-                         Padding="10" Margin="0,5,0,20"/>
+                    <TextBlock Text="Client ID / Номер рахунку" Foreground="Gray"/>
+                    <TextBox Text="{Binding NewSourceClientId, UpdateSourceTrigger=PropertyChanged}" 
+                             Padding="10" Margin="0,5,0,20"/>
+                </StackPanel>
 
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                     <Button Content="Скасувати" Command="{Binding CancelAddCommand}" 
@@ -97,7 +106,7 @@
         </Border>
 
         <Grid Background="#80000000" Visibility="{Binding IsBusy, Converter={StaticResource BoolToVis}}">
-            <TextBlock Text="Зачекайте..." Foreground="White" FontSize="24" 
+            <TextBlock Text="Зачекайте..." Foreground="White" FontSize="24" FontWeight="Bold"
                        HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Grid>
     </Grid>
