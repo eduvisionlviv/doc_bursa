@@ -118,7 +118,8 @@ namespace FinDesk.Services
                     for (var colIndex = 0; colIndex < columns.Count; colIndex++)
                     {
                         reportRow.Columns.TryGetValue(columns[colIndex], out var value);
-                        worksheet.Cell(rowIndex + 2, colIndex + 1).SetValue(value ?? string.Empty);
+                        var cell = worksheet.Cell(rowIndex + 2, colIndex + 1);
+                        SetCellValue(cell, value);
                     }
                 }
 
@@ -231,6 +232,37 @@ namespace FinDesk.Services
             }
 
             return rows.Where(r => filters.All(f => r.Columns.TryGetValue(f.Key, out var value) && string.Equals(value?.ToString(), f.Value, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        private static void SetCellValue(IXLCell cell, object? value)
+        {
+            switch (value)
+            {
+                case null:
+                    cell.Value = string.Empty;
+                    break;
+                case DateTimeOffset dateTimeOffset:
+                    cell.Value = dateTimeOffset.DateTime;
+                    break;
+                case DateTime dateTime:
+                    cell.Value = dateTime;
+                    break;
+                case decimal decimalValue:
+                    cell.Value = decimalValue;
+                    break;
+                case double or float or int or long or short or byte:
+                    cell.Value = value;
+                    break;
+                case string text:
+                    cell.Value = text;
+                    break;
+                case bool boolean:
+                    cell.Value = boolean;
+                    break;
+                default:
+                    cell.Value = value.ToString() ?? string.Empty;
+                    break;
+            }
         }
 
         // Імпорт транзакцій з CSV
