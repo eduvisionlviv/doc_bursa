@@ -13,6 +13,7 @@ namespace FinDesk.Services
     public class CsvImportService
     {
         private readonly DatabaseService _db;
+        private readonly TransactionService _transactionService;
         private readonly CategorizationService _categorization;
         private readonly ILogger _logger;
         private readonly CsvRowValidator _validator;
@@ -42,10 +43,11 @@ namespace FinDesk.Services
             "dd.MM.yy"
         };
 
-        public CsvImportService(DatabaseService db, CategorizationService categorization)
+        public CsvImportService(DatabaseService db, CategorizationService categorization, TransactionService transactionService)
         {
             _db = db;
             _categorization = categorization;
+            _transactionService = transactionService;
             _logger = Log.ForContext<CsvImportService>();
             _validator = new CsvRowValidator();
         }
@@ -100,7 +102,7 @@ namespace FinDesk.Services
                         continue;
                     }
 
-                    if (_db.AddTransaction(transaction))
+                    if (_transactionService.AddTransaction(transaction))
                     {
                         result.Imported++;
                     }
