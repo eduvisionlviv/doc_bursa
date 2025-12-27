@@ -118,7 +118,8 @@ namespace FinDesk.Services
                     for (var colIndex = 0; colIndex < columns.Count; colIndex++)
                     {
                         reportRow.Columns.TryGetValue(columns[colIndex], out var value);
-                        worksheet.Cell(rowIndex + 2, colIndex + 1).SetValue(value ?? string.Empty);
+                        var cellValue = NormalizeCellValue(value);
+                        worksheet.Cell(rowIndex + 2, colIndex + 1).SetValue(cellValue);
                     }
                 }
 
@@ -231,6 +232,21 @@ namespace FinDesk.Services
             }
 
             return rows.Where(r => filters.All(f => r.Columns.TryGetValue(f.Key, out var value) && string.Equals(value?.ToString(), f.Value, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        private static object NormalizeCellValue(object? value)
+        {
+            return value switch
+            {
+                null => string.Empty,
+                DateTime dateTime => dateTime,
+                DateTimeOffset dateTimeOffset => dateTimeOffset.DateTime,
+                decimal decimalValue => Convert.ToDouble(decimalValue),
+                double or float or int or long or short or byte => value,
+                string text => text,
+                bool boolean => boolean,
+                _ => value.ToString() ?? string.Empty
+            };
         }
 
         // Імпорт транзакцій з CSV
