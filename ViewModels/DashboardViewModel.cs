@@ -35,6 +35,7 @@ namespace doc_bursa.ViewModels
         [ObservableProperty]
         private string selectedPeriod = "Поточний місяць";
 
+        // === ГРАФІК 1: ТРЕНД (ЛІНІЯ) ===
         private ISeries[] miniTrendSeries = Array.Empty<ISeries>();
         public ISeries[] MiniTrendSeries
         {
@@ -47,6 +48,14 @@ namespace doc_bursa.ViewModels
         {
             get => miniTrendAxes;
             set => SetProperty(ref miniTrendAxes, value);
+        }
+
+        // === ГРАФІК 2: ВИТРАТИ (КРУГОВА ДІАГРАМА) - ДОДАНО ===
+        private ISeries[] expensesPieSeries = Array.Empty<ISeries>();
+        public ISeries[] ExpensesPieSeries
+        {
+            get => expensesPieSeries;
+            set => SetProperty(ref expensesPieSeries, value);
         }
 
         public List<string> Periods { get; } = new()
@@ -91,7 +100,9 @@ namespace doc_bursa.ViewModels
                 .ToList();
             RecentTransactions = new ObservableCollection<Transaction>(recent);
 
+            // Будуємо обидва графіки
             BuildMiniTrend(transactions);
+            BuildExpensesPieChart(transactions); 
         }
 
         private void BuildMiniTrend(List<Transaction> transactions)
@@ -125,6 +136,33 @@ namespace doc_bursa.ViewModels
             };
         }
 
+        // === НОВИЙ МЕТОД ДЛЯ КРУГОВОЇ ДІАГРАМИ ===
+        private void BuildExpensesPieChart(List<Transaction> transactions)
+        {
+            var expenses = transactions
+                .Where(t => t.Amount < 0)
+                .GroupBy(t => t.Category)
+                .Select(g => new
+                {
+                    Category = g.Key,
+                    Amount = Math.Abs(g.Sum(t => t.Amount))
+                })
+                .OrderByDescending(x => x.Amount)
+                .Take(6) // Топ 6 категорій
+                .ToList();
+
+            ExpensesPieSeries = expenses.Select(x => new PieSeries<double>
+            {
+                Values = new double[] { (double)x.Amount },
+                Name = x.Category,
+                InnerRadius = 60, // Робить "пончик"
+                Pushout = 2,
+                DataLabelsPaint = new SolidColorPaint(SKColors.White),
+                DataLabelsPosition = LiveChartsCore.Measure.PolarLabelsPosition.Middle,
+                DataLabelsFormatter = point => $"{x.Category}"
+            }).ToArray();
+        }
+
         partial void OnSelectedPeriodChanged(string value)
         {
             LoadData();
@@ -144,4 +182,3 @@ namespace doc_bursa.ViewModels
         }
     }
 }
-
