@@ -1,5 +1,5 @@
-# Скрипт для виправлення namespace в проекті doc_bursa
-# Цей скрипт змінює всі namespace з doc_bursa.* на FinDesk.*
+# Скрипт для вирівнювання namespace в проекті doc_bursa
+# Цей скрипт змінює всі namespace з FinDesk.* на doc_bursa.*
 
 $projectPath = "D:\a\doc_bursa\doc_bursa"
 
@@ -24,11 +24,11 @@ foreach ($file in $filesToUpdate) {
         $content = Get-Content $fullPath -Raw -Encoding UTF8
         
         # Замінюємо namespace
-        $content = $content -replace 'namespace doc_bursa\.Models', 'namespace FinDesk.Models'
+        $content = $content -replace 'namespace\s+FinDesk\.Models', 'namespace doc_bursa.Models'
         
         # Додаємо using директиву, якщо її немає
-        if ($content -notmatch 'using FinDesk\.Models;') {
-            $content = $content -replace '(using System[^;]*;[\r\n]+)', "`$1using FinDesk.Models;`r`n"
+        if ($content -notmatch 'using\s+doc_bursa\.Models;') {
+            $content = $content -replace '(using System[^;]*;[\r\n]+)', "`$1using doc_bursa.Models;`r`n"
         }
         
         # Зберігаємо файл

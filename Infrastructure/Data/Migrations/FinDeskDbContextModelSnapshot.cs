@@ -18,22 +18,39 @@ namespace doc_bursa.Infrastructure.Data.Migrations
             modelBuilder
                 .HasAnnotation("ProductVersion", "8.0.5");
 
-            modelBuilder.Entity("FinDesk.Models.Account", b =>
+            modelBuilder.Entity("doc_bursa.Models.Account", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("AccountNumber")
+                        .HasMaxLength(34)
+                        .HasColumnType("TEXT");
 
                     b.Property<decimal>("Balance")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Institution")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(200)
+                        .HasMaxLength(120)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Source")
-                        .HasMaxLength(200)
+                    b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -41,17 +58,48 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                     b.ToTable("Accounts");
                 });
 
-            modelBuilder.Entity("FinDesk.Models.Budget", b =>
+            modelBuilder.Entity("doc_bursa.Models.AccountGroup", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("AlertThreshold")
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("DisplayOrder")
                         .HasColumnType("INTEGER");
 
-                    b.Property<decimal>("Limit")
-                        .HasColumnType("decimal(18,2)");
+                    b.Property<string>("Icon")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("AccountGroups");
+                });
+
+            modelBuilder.Entity("doc_bursa.Models.Budget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("AlertThreshold")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Category")
                         .HasMaxLength(100)
@@ -64,24 +112,26 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime>("EndDate")
+                    b.Property<DateTime?>("EndDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Frequency")
+                        .IsRequired()
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
+                    b.Property<decimal>("Limit")
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("Period")
+                    b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(20)
+                        .HasMaxLength(120)
                         .HasColumnType("TEXT");
 
                     b.Property<decimal>("Spent")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("TEXT");
 
                     b.Property<DateTime>("StartDate")
                         .HasColumnType("TEXT");
@@ -94,153 +144,92 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                     b.ToTable("Budgets");
                 });
 
-            modelBuilder.Entity("FinDesk.Models.Category", b =>
+            modelBuilder.Entity("doc_bursa.Models.Category", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
                     b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("TEXT");
 
                     b.Property<int>("Count")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("Name")
-                        .IsUnique();
-
                     b.ToTable("Categories");
-
-                    b.HasData(
-                        new
-                        {
-                            Id = 1,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Продукти"
-                        },
-                        new
-                        {
-                            Id = 2,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Транспорт"
-                        },
-                        new
-                        {
-                            Id = 3,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Ресторани"
-                        },
-                        new
-                        {
-                            Id = 4,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Здоров'я"
-                        },
-                        new
-                        {
-                            Id = 5,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Розваги"
-                        },
-                        new
-                        {
-                            Id = 6,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Комунальні"
-                        },
-                        new
-                        {
-                            Id = 7,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Житло"
-                        },
-                        new
-                        {
-                            Id = 8,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Зарплата"
-                        },
-                        new
-                        {
-                            Id = 9,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Подарунки"
-                        },
-                        new
-                        {
-                            Id = 10,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Подорожі"
-                        },
-                        new
-                        {
-                            Id = 11,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Одяг"
-                        },
-                        new
-                        {
-                            Id = 12,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Освіта"
-                        },
-                        new
-                        {
-                            Id = 13,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Діти"
-                        },
-                        new
-                        {
-                            Id = 14,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Техніка"
-                        },
-                        new
-                        {
-                            Id = 15,
-                            Amount = 0m,
-                            Count = 0,
-                            Name = "Інше"
-                        });
                 });
 
-            modelBuilder.Entity("FinDesk.Models.RecurringTransaction", b =>
+            modelBuilder.Entity("doc_bursa.Models.MasterGroup", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<string>("Account")
-                        .HasMaxLength(100)
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedDate")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalBalance")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalCredit")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("TotalDebit")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("MasterGroups");
+                });
+
+            modelBuilder.Entity("doc_bursa.Models.MasterGroupAccountGroup", b =>
+                {
+                    b.Property<int>("MasterGroupId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AccountGroupId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("MasterGroupId", "AccountGroupId");
+
+                    b.HasIndex("AccountGroupId");
+
+                    b.ToTable("MasterGroupAccountGroups");
+                });
+
+            modelBuilder.Entity("doc_bursa.Models.RecurringTransaction", b =>
+                {
+                    b.Property<Guid>("Id")
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("AutoExecute")
                         .HasColumnType("INTEGER");
 
+                    b.Property<Guid?>("AccountId")
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Category")
                         .HasMaxLength(100)
@@ -259,7 +248,6 @@ namespace doc_bursa.Infrastructure.Data.Migrations
 
                     b.Property<string>("Frequency")
                         .IsRequired()
-                        .HasMaxLength(20)
                         .HasColumnType("TEXT");
 
                     b.Property<bool>("IsActive")
@@ -269,10 +257,6 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("NextOccurrence")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("OccurrenceCount")
@@ -290,52 +274,113 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountId");
 
                     b.ToTable("RecurringTransactions");
                 });
 
-            modelBuilder.Entity("FinDesk.Models.Transaction", b =>
+            modelBuilder.Entity("doc_bursa.Models.Transaction", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("Account")
+                        .HasMaxLength(120)
+                        .HasColumnType("TEXT");
+
                     b.Property<decimal>("Amount")
-                        .HasColumnType("decimal(18,2)");
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal>("Balance")
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Category")
-                        .HasMaxLength(200)
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime>("Date")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Hash")
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Hash")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDuplicate")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("OriginalTransactionId")
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Source")
-                        .HasMaxLength(200)
+                        .HasMaxLength(120)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TransactionId")
                         .IsRequired()
-                        .HasMaxLength(100)
+                        .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("Hash");
 
                     b.HasIndex("TransactionId")
                         .IsUnique();
 
                     b.ToTable("Transactions");
+                });
+
+            modelBuilder.Entity("doc_bursa.Models.MasterGroupAccountGroup", b =>
+                {
+                    b.HasOne("doc_bursa.Models.AccountGroup", "AccountGroup")
+                        .WithMany("MasterGroupLinks")
+                        .HasForeignKey("AccountGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("doc_bursa.Models.MasterGroup", "MasterGroup")
+                        .WithMany("AccountGroupLinks")
+                        .HasForeignKey("MasterGroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AccountGroup");
+
+                    b.Navigation("MasterGroup");
+                });
+
+            modelBuilder.Entity("doc_bursa.Models.RecurringTransaction", b =>
+                {
+                    b.HasOne("doc_bursa.Models.Account", "Account")
+                        .WithMany("RecurringTransactions")
+                        .HasForeignKey("AccountId");
+
+                    b.Navigation("Account");
+                });
+
+            modelBuilder.Entity("doc_bursa.Models.Account", b =>
+                {
+                    b.Navigation("RecurringTransactions");
+                });
+
+            modelBuilder.Entity("doc_bursa.Models.AccountGroup", b =>
+                {
+                    b.Navigation("MasterGroupLinks");
+                });
+
+            modelBuilder.Entity("doc_bursa.Models.MasterGroup", b =>
+                {
+                    b.Navigation("AccountGroupLinks");
                 });
 #pragma warning restore 612, 618
         }
