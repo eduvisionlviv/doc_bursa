@@ -1,42 +1,125 @@
-name: Fix namespaces (doc_bursa -> FinDesk)
+name: Apply Critical Patches
 
 on:
-  workflow_dispatch:
-
-permissions:
-  contents: write
+  workflow_dispatch:  # Ручний запуск
+    inputs:
+      what_if:
+        description: 'Тільки показати, що буде змінено (без застосування)'
+        required: false
+        default: 'false'
+        type: boolean
+  
+  push:
+    branches:
+      - main
+    paths:
+      - 'scripts/enhance-project.ps1'
+      - '.github/workflows/fix-all-namespaces.yml'
 
 jobs:
-  fix:
-    runs-on: windows-latest
+  apply-patches:
+    runs-on: windows-latest  # Важливо: PowerShell скрипт для Windows
+    
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Replace namespaces/usings in all .cs files
+        with:
+          fetch-depth: 0  # Потрібно для commit/push
+      
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      
+      - name: Restore dependencies
+        run: dotnet restore
+      
+      - name: Apply critical patches
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Path $env:GITHUB_WORKSPACE -Recurse -Filter *.cs
-          foreach ($f in $files) {
-            $text = Get-Content $f.FullName -Raw
-            $text2 = $text `
-              -replace 'namespace\s+doc_bursa', 'namespace FinDesk' `
-              -replace 'using\s+doc_bursa', 'using FinDesk'
-            if ($text2 -ne $text) {
-              Set-Content -Path $f.FullName -Value $text2 -Encoding utf8
-            }
+          Write-Host "🚀 Запуск скрипта enhance-project.ps1"
+          
+          # Перевірка наявності скрипта
+          if (-not (Test-Path "scripts/enhance-project.ps1")) {
+            Write-Error "Скрипт scripts/enhance-project.ps1 не знайдено"
+            exit 1
           }
-
-      - name: Commit & push changes
-        shell: pwsh
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add .
-          git diff --cached --quiet
-          if ($LASTEXITCODE -ne 0) {
-            git commit -m "Fix namespaces/usings to FinDesk"
-            git push
+          
+          # Запуск скрипта
+          if ("${{ inputs.what_if }}" -eq "true") {
+            Write-Host "⚠️ Режим WhatIf (тільки перевірка)"
+            & "scripts/enhance-project.ps1" -WhatIf -Verbose
           } else {
-            "No changes to commit."
+            Write-Host "✅ Режим застосування патчів"
+            & "scripts/enhance-project.ps1" -Verbose
           }
+      
+      - name: Check for changes
+        id: check_changes
+        shell: pwsh
+        run: |
+          git add -A
+          $changes = git status --porcelain
+          
+          if ($changes) {
+            Write-Host "📋 Знайдено зміни:" -ForegroundColor Green
+            Write-Host $changes
+            echo "HAS_CHANGES=true" >> $env:GITHUB_OUTPUT
+          } else {
+            Write-Host "⚠️ Змін не знайдено" -ForegroundColor Yellow
+            echo "HAS_CHANGES=false" >> $env:GITHUB_OUTPUT
+          }
+      
+      - name: Commit and push changes
+        if: steps.check_changes.outputs.HAS_CHANGES == 'true' && inputs.what_if != 'true'
+        shell: pwsh
+        run: |
+          # Конфігурація git
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Створення commit
+          $commitMessage = @"
+          feat: критичні патчі для завершення основного функціоналу
+          
+          - Розширений CSV Import з автовизначенням банків
+          - ML.NET категоризація транзакцій
+          - Розумна дедуплікація (Levenshtein)
+          - Сповіщення про перевищення бюджету
+          
+          Автоматично застосовано через GitHub Actions
+          "@
+          
+          git commit -m $commitMessage
+          
+          # Push змін
+          git push
+          Write-Host "✅ Зміни успішно відправлено в репозиторій" -ForegroundColor Green
+      
+      - name: Upload patch artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: patches
+          path: patches/
+          retention-days: 7
+      
+      - name: Summary
+        shell: pwsh
+        run: |
+          Write-Host "`n📊 Підсумок виконання:" -ForegroundColor Cyan
+          Write-Host "================================" -ForegroundColor Cyan
+          
+          if ("${{ steps.check_changes.outputs.HAS_CHANGES }}" -eq "true") {
+            Write-Host "✅ Зміни застосовано та відправлено в репозиторій" -ForegroundColor Green
+          } elseif ("${{ inputs.what_if }}" -eq "true") {
+            Write-Host "⚠️  Був запущений режим перевірки (WhatIf)" -ForegroundColor Yellow
+            Write-Host "   Щоб застосувати патчі, запустіть workflow з WhatIf=false" -ForegroundColor Yellow
+          } else {
+            Write-Host "ℹ️  Змін не виявлено (все вже застосовано)" -ForegroundColor Blue
+          }
+          
+          Write-Host "`n📝 Наступні кроки:" -ForegroundColor Cyan
+          Write-Host "1. Перевірте зміни локально: git pull" -ForegroundColor White
+          Write-Host "2. Запустіть проект: dotnet run" -ForegroundColor White
+          Write-Host "3. Протестуйте CSV імпорт з різними банками" -ForegroundColor White
