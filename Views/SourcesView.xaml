@@ -29,6 +29,20 @@
                                Command="{Binding ImportCsvCommand}"
                                HorizontalAlignment="Left"/>
                     </StackPanel>
+
+                <Button Command="{Binding ImportExcelCommand}"
+                        Margin="10,0,0,0"
+                        Padding="15,8"
+                        Background="#27AE60"
+                        Foreground="White"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        ToolTip="Імпорт транзакцій з Excel файлу (.xlsx)">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="📊" FontSize="16" Margin="0,0,5,0"/>
+                        <TextBlock Text="Імпорт Excel" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
                 </Border>
 
                 <TextBlock Text="Налаштовані джерела даних" 
