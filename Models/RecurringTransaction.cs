@@ -3,120 +3,154 @@ using System.ComponentModel.DataAnnotations;
 
 namespace FinDesk.Models
 {
-    // Модель періодичних (рекурентних) транзакцій
+    /// <summary>
+    /// Модель періодичних (рекурентних) транзакцій.
+    /// </summary>
     public class RecurringTransaction
     {
         [Key]
-        public int Id { get; set; }
+        public Guid Id { get; set; } = Guid.NewGuid();
 
-        // Назва періодичного платежу
+        /// <summary>
+        /// Назва періодичного платежу.
+        /// </summary>
         [Required]
         [MaxLength(200)]
-        public string Description { get; set; }
+        public string Description { get; set; } = string.Empty;
 
-        // Сума транзакції
+        /// <summary>
+        /// Сума транзакції.
+        /// </summary>
         [Required]
         public decimal Amount { get; set; }
 
-        // Категорія
+        /// <summary>
+        /// Категорія.
+        /// </summary>
         [MaxLength(100)]
-        public string Category { get; set; }
+        public string Category { get; set; } = string.Empty;
 
-        // Рахунок
-        [MaxLength(100)]
-        public string Account { get; set; }
+        /// <summary>
+        /// Ідентифікатор рахунку, до якого прив'язана транзакція.
+        /// </summary>
+        public Guid? AccountId { get; set; }
 
-        // Частота повторення (Daily, Weekly, Monthly, Yearly)
+        /// <summary>
+        /// Посилання на рахунок.
+        /// </summary>
+        public Account? Account { get; set; }
+
+        /// <summary>
+        /// Частота повторення.
+        /// </summary>
         [Required]
-        [MaxLength(20)]
-        public string Frequency { get; set; }
+        public RecurrenceFrequency Frequency { get; set; } = RecurrenceFrequency.Monthly;
 
-        // Інтервал повторення (наприклад, кожні 2 тижні)
+        /// <summary>
+        /// Інтервал повторення (наприклад, кожні 2 тижні).
+        /// </summary>
         public int Interval { get; set; } = 1;
 
-        // Дата початку
+        /// <summary>
+        /// Дата початку.
+        /// </summary>
         [Required]
-        public DateTime StartDate { get; set; }
+        public DateTime StartDate { get; set; } = DateTime.UtcNow.Date;
 
-        // Дата закінчення (опціонально)
+        /// <summary>
+        /// Дата закінчення (опціонально).
+        /// </summary>
         public DateTime? EndDate { get; set; }
 
-        // Наступна дата виконання
-        public DateTime NextOccurrence { get; set; }
+        /// <summary>
+        /// Наступна дата виконання.
+        /// </summary>
+        public DateTime NextOccurrence { get; private set; } = DateTime.UtcNow.Date;
 
-        // Остання дата виконання
-        public DateTime? LastOccurrence { get; set; }
+        /// <summary>
+        /// Остання дата виконання.
+        /// </summary>
+        public DateTime? LastOccurrence { get; private set; }
 
-        // Кількість виконань
-        public int OccurrenceCount { get; set; } = 0;
+        /// <summary>
+        /// Кількість виконань.
+        /// </summary>
+        public int OccurrenceCount { get; private set; }
 
-        // Чи активна транзакція
+        /// <summary>
+        /// Чи активна транзакція.
+        /// </summary>
         public bool IsActive { get; set; } = true;
 
-        // Автоматичне виконання
-        public bool AutoExecute { get; set; } = false;
+        /// <summary>
+        /// Автоматичне виконання.
+        /// </summary>
+        public bool AutoExecute { get; set; }
 
-        // Нагадування перед виконанням (днів)
+        /// <summary>
+        /// Нагадування перед виконанням (днів).
+        /// </summary>
         public int ReminderDays { get; set; } = 1;
 
-        // Нотатки
+        /// <summary>
+        /// Нотатки.
+        /// </summary>
         [MaxLength(500)]
-        public string Notes { get; set; }
+        public string Notes { get; set; } = string.Empty;
 
-        // Дата створення
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        /// <summary>
+        /// Дата створення.
+        /// </summary>
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        // Дата останнього оновлення
+        /// <summary>
+        /// Дата останнього оновлення.
+        /// </summary>
         public DateTime? UpdatedAt { get; set; }
 
-        // Методи для роботи з періодичністю
+        public RecurringTransaction()
+        {
+            CalculateNextOccurrence(StartDate);
+        }
 
         /// <summary>
-        /// Розрахувати наступну дату виконання
+        /// Розрахувати наступну дату виконання.
         /// </summary>
-        public void CalculateNextOccurrence()
+        public void CalculateNextOccurrence(DateTime? fromDate = null)
         {
-            var baseDate = LastOccurrence ?? StartDate;
+            var baseDate = fromDate ?? LastOccurrence ?? StartDate;
 
-            switch (Frequency.ToLower())
+            NextOccurrence = Frequency switch
             {
-                case "daily":
-                    NextOccurrence = baseDate.AddDays(Interval);
-                    break;
-                case "weekly":
-                    NextOccurrence = baseDate.AddDays(7 * Interval);
-                    break;
-                case "monthly":
-                    NextOccurrence = baseDate.AddMonths(Interval);
-                    break;
-                case "yearly":
-                    NextOccurrence = baseDate.AddYears(Interval);
-                    break;
-                default:
-                    NextOccurrence = baseDate.AddMonths(1);
-                    break;
-            }
+                RecurrenceFrequency.Daily => baseDate.AddDays(Interval),
+                RecurrenceFrequency.Weekly => baseDate.AddDays(7 * Interval),
+                RecurrenceFrequency.Monthly => baseDate.AddMonths(Interval),
+                RecurrenceFrequency.Quarterly => baseDate.AddMonths(3 * Interval),
+                RecurrenceFrequency.Yearly => baseDate.AddYears(Interval),
+                _ => baseDate
+            };
         }
 
         /// <summary>
-        /// Перевірити чи настав час для виконання
+        /// Перевірити чи настав час для виконання.
         /// </summary>
-        public bool IsDue()
+        public bool IsDue(DateTime? onDate = null)
         {
-            return IsActive && NextOccurrence.Date <= DateTime.Today;
+            var checkDate = onDate?.Date ?? DateTime.UtcNow.Date;
+            return IsActive && NextOccurrence.Date <= checkDate;
         }
 
         /// <summary>
-        /// Позначити як виконану
+        /// Позначити як виконану.
         /// </summary>
-        public void MarkAsExecuted()
+        public void MarkAsExecuted(DateTime? executedAt = null)
         {
-            LastOccurrence = DateTime.Now;
+            var timestamp = executedAt ?? DateTime.UtcNow;
+            LastOccurrence = timestamp;
             OccurrenceCount++;
-            CalculateNextOccurrence();
-            UpdatedAt = DateTime.Now;
+            CalculateNextOccurrence(timestamp.Date);
+            UpdatedAt = timestamp;
 
-            // Перевірити чи не закінчилась транзакція
             if (EndDate.HasValue && NextOccurrence > EndDate.Value)
             {
                 IsActive = false;
