@@ -79,9 +79,9 @@ namespace FinDesk.Services
         // Комбінований пошук з усіма фільтрами
         public IEnumerable<Transaction> SearchWithFilters(
             IEnumerable<Transaction> transactions,
-            string searchText = null,
-            string category = null,
-            string account = null,
+            string? searchText = null,
+            string? category = null,
+            string? account = null,
             DateTime? startDate = null,
             DateTime? endDate = null,
             decimal? minAmount = null,
@@ -135,4 +135,3 @@ namespace FinDesk.Services
         }
     }
 }
-
