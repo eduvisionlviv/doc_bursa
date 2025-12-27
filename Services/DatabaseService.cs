@@ -16,9 +16,11 @@ namespace FinDesk.Services
         private readonly string _connectionString;
         private readonly ILogger _logger;
 
-        public DatabaseService()
+        public DatabaseService(string? databasePath = null)
         {
-            var dbPath = Path.Combine(App.AppDataPath, "findesk.db");
+            var dbPath = string.IsNullOrWhiteSpace(databasePath)
+                ? Path.Combine(App.AppDataPath, "findesk.db")
+                : databasePath;
             _connectionString = $"Data Source={dbPath}";
             _logger = Log.ForContext<DatabaseService>();
             InitializeDatabase();
@@ -76,6 +78,7 @@ namespace FinDesk.Services
             command.ExecuteNonQuery();
 
             EnsureTransactionColumns(connection);
+            EnsureBudgetTable(connection);
         }
 
         private static void EnsureTransactionColumns(SqliteConnection connection)
@@ -107,6 +110,30 @@ namespace FinDesk.Services
             AddColumnIfMissing("Balance", "REAL");
             AddColumnIfMissing("IsDuplicate", "INTEGER DEFAULT 0");
             AddColumnIfMissing("OriginalTransactionId", "TEXT");
+        }
+
+        private static void EnsureBudgetTable(SqliteConnection connection)
+        {
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                CREATE TABLE IF NOT EXISTS Budgets (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    Category TEXT,
+                    MonthlyLimit REAL NOT NULL,
+                    Spent REAL NOT NULL,
+                    Frequency TEXT NOT NULL,
+                    StartDate TEXT NOT NULL,
+                    EndDate TEXT,
+                    IsActive INTEGER NOT NULL,
+                    AlertThreshold INTEGER NOT NULL,
+                    Description TEXT,
+                    CreatedAt TEXT NOT NULL,
+                    UpdatedAt TEXT
+                );
+            ";
+
+            command.ExecuteNonQuery();
         }
 
         // Transactions
@@ -332,6 +359,135 @@ namespace FinDesk.Services
             }
 
             return accounts;
+        }
+
+        // Budgets
+        /// <summary>
+        /// Зберегти або оновити бюджет.
+        /// </summary>
+        public void SaveBudget(Budget budget)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                INSERT OR REPLACE INTO Budgets
+                (Id, Name, Category, MonthlyLimit, Spent, Frequency, StartDate, EndDate, IsActive, AlertThreshold, Description, CreatedAt, UpdatedAt)
+                VALUES ($id, $name, $category, $limit, $spent, $frequency, $start, $end, $active, $threshold, $description, $created, $updated)";
+
+            command.Parameters.AddWithValue("$id", budget.Id.ToString());
+            command.Parameters.AddWithValue("$name", budget.Name);
+            command.Parameters.AddWithValue("$category", budget.Category ?? string.Empty);
+            command.Parameters.AddWithValue("$limit", budget.Limit);
+            command.Parameters.AddWithValue("$spent", budget.Spent);
+            command.Parameters.AddWithValue("$frequency", budget.Frequency.ToString());
+            command.Parameters.AddWithValue("$start", budget.StartDate.ToString("o"));
+            command.Parameters.AddWithValue("$end", budget.EndDate?.ToString("o") ?? string.Empty);
+            command.Parameters.AddWithValue("$active", budget.IsActive ? 1 : 0);
+            command.Parameters.AddWithValue("$threshold", budget.AlertThreshold);
+            command.Parameters.AddWithValue("$description", budget.Description ?? string.Empty);
+            command.Parameters.AddWithValue("$created", budget.CreatedAt.ToString("o"));
+            command.Parameters.AddWithValue("$updated", budget.UpdatedAt?.ToString("o") ?? string.Empty);
+
+            command.ExecuteNonQuery();
+        }
+
+        /// <summary>
+        /// Отримати всі бюджети.
+        /// </summary>
+        public List<Budget> GetBudgets()
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT Id, Name, Category, MonthlyLimit, Spent, Frequency, StartDate, EndDate, IsActive, AlertThreshold, Description, CreatedAt, UpdatedAt FROM Budgets";
+
+            var result = new List<Budget>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var budget = new Budget
+                {
+                    Id = Guid.Parse(reader.GetString(0)),
+                    Name = reader.GetString(1),
+                    Category = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                    Limit = (decimal)reader.GetDouble(3),
+                    Spent = (decimal)reader.GetDouble(4),
+                    Frequency = Enum.TryParse<BudgetFrequency>(reader.GetString(5), true, out var freq) ? freq : BudgetFrequency.Monthly,
+                    StartDate = DateTime.Parse(reader.GetString(6)),
+                    EndDate = reader.IsDBNull(7) || string.IsNullOrWhiteSpace(reader.GetString(7))
+                        ? null
+                        : DateTime.Parse(reader.GetString(7)),
+                    IsActive = !reader.IsDBNull(8) && reader.GetInt32(8) == 1,
+                    AlertThreshold = reader.GetInt32(9),
+                    Description = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
+                    CreatedAt = DateTime.Parse(reader.GetString(11)),
+                    UpdatedAt = reader.IsDBNull(12) || string.IsNullOrWhiteSpace(reader.GetString(12))
+                        ? null
+                        : DateTime.Parse(reader.GetString(12))
+                };
+
+                result.Add(budget);
+            }
+
+            return result;
+        }
+
+        /// <summary>
+        /// Отримати бюджет за ідентифікатором.
+        /// </summary>
+        public Budget? GetBudget(Guid id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"SELECT Id, Name, Category, MonthlyLimit, Spent, Frequency, StartDate, EndDate, IsActive, AlertThreshold, Description, CreatedAt, UpdatedAt 
+                                    FROM Budgets WHERE Id = $id LIMIT 1";
+            command.Parameters.AddWithValue("$id", id.ToString());
+
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                return null;
+            }
+
+            return new Budget
+            {
+                Id = Guid.Parse(reader.GetString(0)),
+                Name = reader.GetString(1),
+                Category = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                Limit = (decimal)reader.GetDouble(3),
+                Spent = (decimal)reader.GetDouble(4),
+                Frequency = Enum.TryParse<BudgetFrequency>(reader.GetString(5), true, out var freq) ? freq : BudgetFrequency.Monthly,
+                StartDate = DateTime.Parse(reader.GetString(6)),
+                EndDate = reader.IsDBNull(7) || string.IsNullOrWhiteSpace(reader.GetString(7))
+                    ? null
+                    : DateTime.Parse(reader.GetString(7)),
+                IsActive = !reader.IsDBNull(8) && reader.GetInt32(8) == 1,
+                AlertThreshold = reader.GetInt32(9),
+                Description = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
+                CreatedAt = DateTime.Parse(reader.GetString(11)),
+                UpdatedAt = reader.IsDBNull(12) || string.IsNullOrWhiteSpace(reader.GetString(12))
+                    ? null
+                    : DateTime.Parse(reader.GetString(12))
+            };
+        }
+
+        /// <summary>
+        /// Видалити бюджет.
+        /// </summary>
+        public void DeleteBudget(Guid id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM Budgets WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id.ToString());
+            command.ExecuteNonQuery();
         }
 
         // Data Sources

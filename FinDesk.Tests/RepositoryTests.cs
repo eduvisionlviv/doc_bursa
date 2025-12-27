@@ -140,7 +140,7 @@ namespace FinDesk.Tests
                 Category = "Продукти",
                 Limit = 1000m,
                 Spent = 200m,
-                Period = "Monthly",
+                Frequency = BudgetFrequency.Monthly,
                 StartDate = DateTime.UtcNow.Date,
                 EndDate = DateTime.UtcNow.Date.AddMonths(1),
                 IsActive = true,

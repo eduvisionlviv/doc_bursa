@@ -23,8 +23,9 @@ namespace FinDesk.ViewModels
                 "Dashboard" => new DashboardView(),
                 "Transactions" => new TransactionsView(),
                 "Sources" => new SourcesView(),
-                                "Groups" => new GroupsView(),
-                                                                "Analytics" => new AnalyticsView(),
+                "Budgets" => new BudgetView(),
+                "Groups" => new GroupsView(),
+                "Analytics" => new AnalyticsView(),
                 _ => CurrentView
             };
         }

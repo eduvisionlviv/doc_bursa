@@ -16,7 +16,7 @@ namespace FinDesk.Infrastructure.Repositories
             DbSet = Context.Set<TEntity>();
         }
 
-        public virtual async Task<TEntity?> GetByIdAsync(int id)
+        public virtual async Task<TEntity?> GetByIdAsync(object id)
         {
             return await DbSet.FindAsync(id);
         }
