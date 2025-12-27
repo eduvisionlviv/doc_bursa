@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 
 namespace FinDesk.Models
@@ -101,6 +102,7 @@ namespace FinDesk.Models
         /// <summary>
         /// Колекція рахунків в групі
         /// </summary>
+        [NotMapped]
         public ObservableCollection<string> AccountNumbers { get; set; }
 
         /// <summary>

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace FinDesk.Models
 {
@@ -36,6 +37,7 @@ namespace FinDesk.Models
         /// <summary>
         /// Список ID джерел даних в цій групі
         /// </summary>
+        [NotMapped]
         public List<int> SourceIds { get; set; } = new();
         
         /// <summary>
