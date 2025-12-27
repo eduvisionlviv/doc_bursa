@@ -55,7 +55,7 @@
             </StackPanel>
         </Border>
 
-        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Vertical" Margin="0 0 0 0" Padding="0 0 0 0">
+        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Vertical" Margin="0 0 0 0">
             <Border Background="White" Padding="16" CornerRadius="8" Margin="0 0 0 12">
                 <StackPanel>
                     <TextBlock Text="Активні бюджети" FontWeight="Bold" FontSize="16" Margin="0 0 0 12"/>
