@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using FinDesk.Models;
+using doc_bursa.Models; // Виправлено з FinDesk.Models
 
-namespace FinDesk.Services
+namespace doc_bursa.Services // Виправлено з FinDesk.Services
 {
     /// <summary>
     /// Керує створенням та виконанням рекурентних транзакцій з простим планувальником.
