@@ -15,11 +15,15 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                 name: "Accounts",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Source = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    Balance = table.Column<decimal>(type: "decimal(18,2)", nullable: false)
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", maxLength: 120, nullable: false),
+                    AccountNumber = table.Column<string>(type: "TEXT", maxLength: 34, nullable: true),
+                    Institution = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true),
+                    Currency = table.Column<string>(type: "TEXT", maxLength: 3, nullable: false),
+                    Balance = table.Column<decimal>(type: "TEXT", nullable: false),
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: true)
                 },
                 constraints: table =>
                 {
@@ -27,18 +31,36 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "Budgets",
+                name: "AccountGroups",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    Description = table.Column<string>(type: "TEXT", nullable: true),
+                    Color = table.Column<string>(type: "TEXT", nullable: false),
+                    Icon = table.Column<string>(type: "TEXT", nullable: false),
+                    CreatedDate = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
+                    DisplayOrder = table.Column<int>(type: "INTEGER", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_AccountGroups", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Budgets",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", maxLength: 120, nullable: false),
                     Category = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    Limit = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    Spent = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    Period = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),
+                    Limit = table.Column<decimal>(type: "TEXT", nullable: false),
+                    Spent = table.Column<decimal>(type: "TEXT", nullable: false),
+                    Frequency = table.Column<string>(type: "TEXT", nullable: false),
                     StartDate = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    EndDate = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    EndDate = table.Column<DateTime>(type: "TEXT", nullable: true),
                     IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
                     AlertThreshold = table.Column<int>(type: "INTEGER", nullable: false),
                     Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
@@ -56,8 +78,8 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                 {
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
-                    Name = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    Amount = table.Column<decimal>(type: "TEXT", nullable: false),
                     Count = table.Column<int>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
@@ -66,16 +88,58 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                 });
 
             migrationBuilder.CreateTable(
-                name: "RecurringTransactions",
+                name: "MasterGroups",
                 columns: table => new
                 {
                     Id = table.Column<int>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
+                    Name = table.Column<string>(type: "TEXT", nullable: false),
+                    Description = table.Column<string>(type: "TEXT", nullable: true),
+                    CreatedDate = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
+                    Color = table.Column<string>(type: "TEXT", nullable: false),
+                    TotalBalance = table.Column<decimal>(type: "TEXT", nullable: false),
+                    TotalDebit = table.Column<decimal>(type: "TEXT", nullable: false),
+                    TotalCredit = table.Column<decimal>(type: "TEXT", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_MasterGroups", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Transactions",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    TransactionId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
+                    Date = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    Amount = table.Column<decimal>(type: "TEXT", nullable: false),
+                    Description = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true),
                     Category = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    Account = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
-                    Frequency = table.Column<string>(type: "TEXT", maxLength: 20, nullable: false),
+                    Source = table.Column<string>(type: "TEXT", maxLength: 120, nullable: true),
+                    Account = table.Column<string>(type: "TEXT", maxLength: 120, nullable: true),
+                    Balance = table.Column<decimal>(type: "TEXT", nullable: false),
+                    Hash = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true),
+                    IsDuplicate = table.Column<bool>(type: "INTEGER", nullable: false),
+                    OriginalTransactionId = table.Column<string>(type: "TEXT", maxLength: 128, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Transactions", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "RecurringTransactions",
+                columns: table => new
+                {
+                    Id = table.Column<Guid>(type: "TEXT", nullable: false),
+                    Description = table.Column<string>(type: "TEXT", maxLength: 200, nullable: false),
+                    Amount = table.Column<decimal>(type: "TEXT", nullable: false),
+                    Category = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true),
+                    AccountId = table.Column<Guid>(type: "TEXT", nullable: true),
+                    Frequency = table.Column<string>(type: "TEXT", nullable: false),
                     Interval = table.Column<int>(type: "INTEGER", nullable: false),
                     StartDate = table.Column<DateTime>(type: "TEXT", nullable: false),
                     EndDate = table.Column<DateTime>(type: "TEXT", nullable: true),
@@ -92,59 +156,46 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_RecurringTransactions", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_RecurringTransactions_Accounts_AccountId",
+                        column: x => x.AccountId,
+                        principalTable: "Accounts",
+                        principalColumn: "Id");
                 });
 
             migrationBuilder.CreateTable(
-                name: "Transactions",
+                name: "MasterGroupAccountGroups",
                 columns: table => new
                 {
-                    Id = table.Column<int>(type: "INTEGER", nullable: false)
-                        .Annotation("Sqlite:Autoincrement", true),
-                    TransactionId = table.Column<string>(type: "TEXT", maxLength: 100, nullable: false),
-                    Date = table.Column<DateTime>(type: "TEXT", nullable: false),
-                    Amount = table.Column<decimal>(type: "decimal(18,2)", nullable: false),
-                    Description = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
-                    Category = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    Source = table.Column<string>(type: "TEXT", maxLength: 200, nullable: true),
-                    Hash = table.Column<string>(type: "TEXT", maxLength: 256, nullable: true)
+                    MasterGroupId = table.Column<int>(type: "INTEGER", nullable: false),
+                    AccountGroupId = table.Column<int>(type: "INTEGER", nullable: false)
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_Transactions", x => x.Id);
-                });
-
-            migrationBuilder.InsertData(
-                table: "Categories",
-                columns: new[] { "Id", "Amount", "Count", "Name" },
-                values: new object[,]
-                {
-                    { 1, 0m, 0, "Продукти" },
-                    { 2, 0m, 0, "Транспорт" },
-                    { 3, 0m, 0, "Ресторани" },
-                    { 4, 0m, 0, "Здоров'я" },
-                    { 5, 0m, 0, "Розваги" },
-                    { 6, 0m, 0, "Комунальні" },
-                    { 7, 0m, 0, "Житло" },
-                    { 8, 0m, 0, "Зарплата" },
-                    { 9, 0m, 0, "Подарунки" },
-                    { 10, 0m, 0, "Подорожі" },
-                    { 11, 0m, 0, "Одяг" },
-                    { 12, 0m, 0, "Освіта" },
-                    { 13, 0m, 0, "Діти" },
-                    { 14, 0m, 0, "Техніка" },
-                    { 15, 0m, 0, "Інше" }
+                    table.PrimaryKey("PK_MasterGroupAccountGroups", x => new { x.MasterGroupId, x.AccountGroupId });
+                    table.ForeignKey(
+                        name: "FK_MasterGroupAccountGroups_AccountGroups_AccountGroupId",
+                        column: x => x.AccountGroupId,
+                        principalTable: "AccountGroups",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                    table.ForeignKey(
+                        name: "FK_MasterGroupAccountGroups_MasterGroups_MasterGroupId",
+                        column: x => x.MasterGroupId,
+                        principalTable: "MasterGroups",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
                 });
 
             migrationBuilder.CreateIndex(
-                name: "IX_Categories_Name",
-                table: "Categories",
-                column: "Name",
-                unique: true);
+                name: "IX_MasterGroupAccountGroups_AccountGroupId",
+                table: "MasterGroupAccountGroups",
+                column: "AccountGroupId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_Transactions_Hash",
-                table: "Transactions",
-                column: "Hash");
+                name: "IX_RecurringTransactions_AccountId",
+                table: "RecurringTransactions",
+                column: "AccountId");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Transactions_TransactionId",
@@ -157,19 +208,28 @@ namespace doc_bursa.Infrastructure.Data.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropTable(
-                name: "Accounts");
-
-            migrationBuilder.DropTable(
                 name: "Budgets");
 
             migrationBuilder.DropTable(
                 name: "Categories");
 
             migrationBuilder.DropTable(
+                name: "MasterGroupAccountGroups");
+
+            migrationBuilder.DropTable(
                 name: "RecurringTransactions");
 
             migrationBuilder.DropTable(
                 name: "Transactions");
+
+            migrationBuilder.DropTable(
+                name: "AccountGroups");
+
+            migrationBuilder.DropTable(
+                name: "MasterGroups");
+
+            migrationBuilder.DropTable(
+                name: "Accounts");
         }
     }
 }

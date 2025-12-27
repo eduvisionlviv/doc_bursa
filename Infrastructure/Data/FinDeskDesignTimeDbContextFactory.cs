@@ -11,7 +11,7 @@ namespace doc_bursa.Infrastructure.Data
         {
             var basePath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "FinDesk");
+                "doc_bursa");
 
             Directory.CreateDirectory(basePath);
             var dbPath = Path.Combine(basePath, "findesk.db");
