@@ -118,7 +118,7 @@ namespace FinDesk.Services
                     for (var colIndex = 0; colIndex < columns.Count; colIndex++)
                     {
                         reportRow.Columns.TryGetValue(columns[colIndex], out var value);
-                        worksheet.Cell(rowIndex + 2, colIndex + 1).Value = value;
+                        worksheet.Cell(rowIndex + 2, colIndex + 1).SetValue(value ?? string.Empty);
                     }
                 }
 
@@ -245,4 +245,3 @@ namespace FinDesk.Services
         }
     }
 }
-

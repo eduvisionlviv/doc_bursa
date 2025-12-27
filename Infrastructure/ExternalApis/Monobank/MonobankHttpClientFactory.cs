@@ -2,6 +2,8 @@ using System;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Threading;
+using System.Threading.Tasks;
 using Polly;
 using Polly.Extensions.Http;
 
@@ -14,7 +16,7 @@ namespace FinDesk.Infrastructure.ExternalApis.Monobank
         public static HttpClient Create(string token)
         {
             var policy = BuildRetryPolicy();
-            var handler = new PolicyHttpMessageHandler(policy)
+            var handler = new PolicyHandler(policy)
             {
                 InnerHandler = new HttpClientHandler()
             };
@@ -44,6 +46,20 @@ namespace FinDesk.Infrastructure.ExternalApis.Monobank
                         // The caller is expected to log the attempt; no logging here to keep factory pure.
                     });
         }
+
+        private sealed class PolicyHandler : DelegatingHandler
+        {
+            private readonly IAsyncPolicy<HttpResponseMessage> _policy;
+
+            public PolicyHandler(IAsyncPolicy<HttpResponseMessage> policy)
+            {
+                _policy = policy ?? throw new ArgumentNullException(nameof(policy));
+            }
+
+            protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+            {
+                return _policy.ExecuteAsync(ct => base.SendAsync(request, ct), cancellationToken);
+            }
+        }
     }
 }
-

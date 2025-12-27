@@ -14,11 +14,11 @@ namespace FinDesk.Models
     public class MasterGroup : INotifyPropertyChanged
     {
         private int _id;
-        private string _name;
-        private string _description;
+        private string _name = string.Empty;
+        private string _description = string.Empty;
         private DateTime _createdDate;
         private bool _isActive;
-        private string _color;
+        private string _color = string.Empty;
 
         [Key]
         public int Id
