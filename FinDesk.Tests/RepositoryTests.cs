@@ -1,13 +1,13 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using FinDesk.Infrastructure.Data;
-using FinDesk.Infrastructure.Repositories;
-using FinDesk.Models;
+using doc_bursa.Infrastructure.Data;
+using doc_bursa.Infrastructure.Repositories;
+using doc_bursa.Models;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace FinDesk.Tests
+namespace doc_bursa.Tests
 {
     public class RepositoryTests
     {

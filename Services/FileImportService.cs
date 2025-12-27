@@ -5,9 +5,9 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using ClosedXML.Excel;
-using FinDesk.Models;
+using doc_bursa.Models;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     public class FileImportService
     {

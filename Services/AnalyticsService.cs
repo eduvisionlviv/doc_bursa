@@ -2,12 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.Caching;
-using System.Threading;
-using System.Threading.Tasks;
-using FinDesk.Models;
-using FinDesk.Services;
+using doc_bursa.Models;
+using doc_bursa.Services;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     /// <summary>
     /// Сервіс для аналітики фінансових даних

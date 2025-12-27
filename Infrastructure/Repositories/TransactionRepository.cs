@@ -1,7 +1,7 @@
-using FinDesk.Infrastructure.Data;
-using FinDesk.Models;
+using doc_bursa.Infrastructure.Data;
+using doc_bursa.Models;
 
-namespace FinDesk.Infrastructure.Repositories
+namespace doc_bursa.Infrastructure.Repositories
 {
     public class TransactionRepository : Repository<Transaction>
     {

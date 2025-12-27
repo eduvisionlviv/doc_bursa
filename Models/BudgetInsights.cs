@@ -1,6 +1,6 @@
 using System;
 
-namespace FinDesk.Models
+namespace doc_bursa.Models
 {
     /// <summary>
     /// Результат аналізу бюджету з метриками використання.

@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 using Polly;
 using Polly.Extensions.Http;
 
-namespace FinDesk.Infrastructure.ExternalApis.Monobank
+namespace doc_bursa.Infrastructure.ExternalApis.Monobank
 {
     public static class MonobankHttpClientFactory
     {

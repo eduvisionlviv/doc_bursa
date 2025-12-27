@@ -1,8 +1,8 @@
-<UserControl x:Class="FinDesk.Views.TransactionsView"
+<UserControl x:Class="doc_bursa.Views.TransactionsView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:FinDesk.ViewModels"
-             xmlns:cvt="clr-namespace:FinDesk.Converters">
+             xmlns:vm="clr-namespace:doc_bursa.ViewModels"
+             xmlns:cvt="clr-namespace:doc_bursa.Converters">
     <UserControl.Resources>
         <cvt:AmountToColorConverter x:Key="AmountToColorConverter"/>
     </UserControl.Resources>

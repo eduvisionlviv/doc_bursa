@@ -1,7 +1,7 @@
-<UserControl x:Class="FinDesk.Views.DashboardView"
+<UserControl x:Class="doc_bursa.Views.DashboardView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:FinDesk.ViewModels"
+             xmlns:vm="clr-namespace:doc_bursa.ViewModels"
              xmlns:lvc="clr-namespace:LiveChartsCore.SkiaSharpView.WPF;assembly=LiveChartsCore.SkiaSharpView.WPF">    <UserControl.DataContext>
         <vm:DashboardViewModel/>
     </UserControl.DataContext>
