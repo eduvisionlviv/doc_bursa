@@ -192,9 +192,6 @@ namespace doc_bursa.Services
         }
 
         // Transactions
-        /// <summary>
-        /// Зберегти транзакцію в базі даних (insert or replace).
-        /// </summary>
         public void SaveTransaction(Transaction transaction)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -224,9 +221,6 @@ namespace doc_bursa.Services
             _logger.Information("Transaction saved: {TransactionId}", transaction.TransactionId);
         }
 
-        /// <summary>
-        /// Масово зберігає транзакції в одній транзакції SQLite для підвищення продуктивності.
-        /// </summary>
         public void SaveTransactions(IEnumerable<Transaction> transactions)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -278,9 +272,6 @@ namespace doc_bursa.Services
         public Task SaveTransactionsAsync(IEnumerable<Transaction> transactions, CancellationToken cancellationToken = default)
             => Task.Run(() => SaveTransactions(transactions), cancellationToken);
 
-        /// <summary>
-        /// Додати транзакцію з обробкою помилок.
-        /// </summary>
         public bool AddTransaction(Transaction transaction)
         {
             try
@@ -295,9 +286,7 @@ namespace doc_bursa.Services
             }
         }
 
-        /// <summary>
-        /// Отримати транзакції з можливими фільтрами по датах, категорії та рахунку.
-        /// </summary>
+        // 👇 ТУТ ВИПРАВЛЕННЯ: Безпечне читання дати, щоб не вилітало
         public List<Transaction> GetTransactions(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -337,11 +326,19 @@ namespace doc_bursa.Services
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
+                // Захист: якщо дата бита, беремо MinValue замість крашу
+                DateTime dateVal;
+                var dateStr = reader.GetString(2);
+                if (!DateTime.TryParse(dateStr, out dateVal))
+                {
+                    dateVal = DateTime.MinValue;
+                }
+
                 var transaction = new Transaction
                 {
                     Id = reader.GetInt32(0),
                     TransactionId = reader.GetString(1),
-                    Date = DateTime.Parse(reader.GetString(2)),
+                    Date = dateVal,
                     Amount = (decimal)reader.GetDouble(3),
                     Description = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
                     Category = reader.IsDBNull(5) ? "Інше" : reader.GetString(5),
@@ -365,17 +362,11 @@ namespace doc_bursa.Services
             return Task.Run(() => GetTransactions(from, to, category, account), cancellationToken);
         }
 
-        /// <summary>
-        /// Отримати транзакції для конкретного рахунку.
-        /// </summary>
         public List<Transaction> GetTransactionsByAccount(string account)
         {
             return GetTransactions(account: account);
         }
 
-        /// <summary>
-        /// Оновити категорію транзакції за ідентифікатором.
-        /// </summary>
         public void UpdateTransactionCategory(int id, string category)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -388,9 +379,6 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
         }
 
-        /// <summary>
-        /// Видалити транзакцію.
-        /// </summary>
         public void DeleteTransaction(int id)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -402,9 +390,6 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
         }
 
-        /// <summary>
-        /// Отримати транзакцію за її TransactionId.
-        /// </summary>
         public Transaction? GetTransactionByTransactionId(string transactionId)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -418,11 +403,16 @@ namespace doc_bursa.Services
             using var reader = command.ExecuteReader();
             if (reader.Read())
             {
+                // Також захищаємо від битої дати
+                DateTime dateVal;
+                var dateStr = reader.GetString(2);
+                if (!DateTime.TryParse(dateStr, out dateVal)) dateVal = DateTime.MinValue;
+
                 return new Transaction
                 {
                     Id = reader.GetInt32(0),
                     TransactionId = reader.GetString(1),
-                    Date = DateTime.Parse(reader.GetString(2)),
+                    Date = dateVal,
                     Amount = (decimal)reader.GetDouble(3),
                     Description = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
                     Category = reader.IsDBNull(5) ? "Інше" : reader.GetString(5),
@@ -439,9 +429,6 @@ namespace doc_bursa.Services
             return null;
         }
 
-        /// <summary>
-        /// Оновити дублікатну інформацію транзакції.
-        /// </summary>
         public void UpdateDuplicateInfo(int id, bool isDuplicate, string? originalTransactionId)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -457,9 +444,6 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
         }
 
-        /// <summary>
-        /// Отримати унікальні назви рахунків з транзакцій.
-        /// </summary>
         public List<string> GetUniqueAccounts()
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -479,9 +463,6 @@ namespace doc_bursa.Services
         }
 
         // Budgets
-        /// <summary>
-        /// Зберегти або оновити бюджет.
-        /// </summary>
         public void SaveBudget(Budget budget)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -510,9 +491,6 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
         }
 
-        /// <summary>
-        /// Отримати всі бюджети.
-        /// </summary>
         public List<Budget> GetBudgets()
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -552,9 +530,6 @@ namespace doc_bursa.Services
             return result;
         }
 
-        /// <summary>
-        /// Отримати бюджет за ідентифікатором.
-        /// </summary>
         public Budget? GetBudget(Guid id)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -593,9 +568,6 @@ namespace doc_bursa.Services
             };
         }
 
-        /// <summary>
-        /// Видалити бюджет.
-        /// </summary>
         public void DeleteBudget(Guid id)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -733,9 +705,6 @@ namespace doc_bursa.Services
         }
 
         // Data Sources
-        /// <summary>
-        /// Додати нове джерело даних.
-        /// </summary>
         public void AddDataSource(DataSource source)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -823,9 +792,6 @@ namespace doc_bursa.Services
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
 
-        /// <summary>
-        /// Оновити існуюче джерело даних.
-        /// </summary>
         public void UpdateDataSource(DataSource source)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -849,9 +815,6 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
         }
 
-        /// <summary>
-        /// Видалити джерело даних.
-        /// </summary>
         public void DeleteDataSource(int id)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -863,9 +826,6 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
         }
 
-        /// <summary>
-        /// Отримати всі джерела даних.
-        /// </summary>
         public List<DataSource> GetDataSources()
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -920,9 +880,6 @@ namespace doc_bursa.Services
         }
 
         // Category Rules
-        /// <summary>
-        /// Додати правило категоризації.
-        /// </summary>
         public void SaveCategoryRule(string pattern, string category)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -935,9 +892,6 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
         }
 
-        /// <summary>
-        /// Отримати всі правила категоризації.
-        /// </summary>
         public Dictionary<string, string> GetCategoryRules()
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -957,9 +911,6 @@ namespace doc_bursa.Services
         }
 
         // MasterGroup CRUD operations
-        /// <summary>
-        /// Зберегти або оновити майстер-групу.
-        /// </summary>
         public void SaveMasterGroup(MasterGroup group)
         {
             using var connection = new SqliteConnection(_connectionString);
@@ -992,9 +943,6 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
         }
 
-        /// <summary>
-        /// Отримати активні майстер-групи.
-        /// </summary>
         public List<MasterGroup> GetMasterGroups()
         {
             var groups = new List<MasterGroup>();
@@ -1032,9 +980,6 @@ namespace doc_bursa.Services
             return groups;
         }
 
-        /// <summary>
-        /// Деактивувати майстер-групу (soft delete).
-        /// </summary>
         public void DeleteMasterGroup(int id)
         {
             using var connection = new SqliteConnection(_connectionString);
