@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.ComponentModel.DataAnnotations;
 
-namespace FinDesk.Models{
+namespace FinDesk.Models
+{
     /// <summary>
     /// Група рахунків для об'єднання та аналізу
     /// </summary>
     public class AccountGroup
     {
+        [Key]
         public int Id { get; set; }
         
         /// <summary>
@@ -49,6 +52,11 @@ namespace FinDesk.Models{
         /// Порядок відображення
         /// </summary>
         public int DisplayOrder { get; set; }
+
+        /// <summary>
+        /// Посилання на майстер-групи з композитним ключем.
+        /// </summary>
+        public ICollection<MasterGroupAccountGroup> MasterGroupLinks { get; set; } = new List<MasterGroupAccountGroup>();
         
         /// <summary>
         /// Розраховує загальний баланс групи
@@ -87,4 +95,3 @@ namespace FinDesk.Models{
         }
     }
 }
-
