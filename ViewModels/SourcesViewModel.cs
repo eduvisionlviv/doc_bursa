@@ -355,4 +355,3 @@ namespace FinDesk.ViewModels
         }
     }
 }
-

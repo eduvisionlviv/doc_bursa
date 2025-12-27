@@ -582,13 +582,70 @@ namespace FinDesk.Services
             command.ExecuteNonQuery();
         }
 
-        public Task AddDataSourceAsync(DataSource source, CancellationToken cancellationToken = default)
-            => Task.Run(() => AddDataSource(source), cancellationToken);
-        public Task UpdateDataSourceAsync(DataSource source, CancellationToken cancellationToken = default)
-            => Task.Run(() => UpdateDataSource(source), cancellationToken);
+        public async Task AddDataSourceAsync(DataSource source, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
 
-        public Task DeleteDataSourceAsync(int id, CancellationToken cancellationToken = default)
-            => Task.Run(() => DeleteDataSource(id), cancellationToken);
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                INSERT INTO DataSources 
+                (Name, Type, ApiToken, ClientId, ClientSecret, IsEnabled, LastSync)
+                VALUES ($name, $type, $token, $cid, $secret, $enabled, $sync)
+            ";
+
+            command.Parameters.AddWithValue("$name", source.Name);
+            command.Parameters.AddWithValue("$type", source.Type);
+            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
+            command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        public async Task UpdateDataSourceAsync(DataSource source, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                UPDATE DataSources 
+                SET Type = $type, ApiToken = $token, ClientId = $cid, 
+                    ClientSecret = $secret, IsEnabled = $enabled, LastSync = $sync
+                WHERE Id = $id
+            ";
+
+            command.Parameters.AddWithValue("$type", source.Type);
+            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
+            command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
+            command.Parameters.AddWithValue("$id", source.Id);
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        public async Task DeleteDataSourceAsync(int id, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM DataSources WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id);
+
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
 
         /// <summary>
         /// Оновити існуюче джерело даних.
@@ -645,23 +702,46 @@ namespace FinDesk.Services
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
-                sources.Add(new DataSource
-                {
-                    Id = reader.GetInt32(0),
-                    Name = reader.GetString(1),
-                    Type = reader.GetString(2),
-                    ApiToken = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
-                    ClientId = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                    ClientSecret = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
-                    IsEnabled = reader.GetInt32(6) == 1,
-                    LastSync = string.IsNullOrEmpty(reader.GetString(7)) ? null : DateTime.Parse(reader.GetString(7))
-                });
+                sources.Add(ReadDataSource(reader));
             }
 
             return sources;
         }
 
-        public Task<List<DataSource>> GetDataSourcesAsync() => Task.Run(GetDataSources);
+        public async Task<List<DataSource>> GetDataSourcesAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            await using var connection = new SqliteConnection(_connectionString);
+            await connection.OpenAsync(cancellationToken);
+
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT * FROM DataSources";
+
+            var sources = new List<DataSource>();
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                sources.Add(ReadDataSource(reader));
+            }
+
+            return sources;
+        }
+
+        private static DataSource ReadDataSource(SqliteDataReader reader)
+        {
+            return new DataSource
+            {
+                Id = reader.GetInt32(0),
+                Name = reader.GetString(1),
+                Type = reader.GetString(2),
+                ApiToken = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                ClientId = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                ClientSecret = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+                IsEnabled = reader.GetInt32(6) == 1,
+                LastSync = string.IsNullOrEmpty(reader.GetString(7)) ? null : DateTime.Parse(reader.GetString(7))
+            };
+        }
 
         // Category Rules
         /// <summary>

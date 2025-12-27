@@ -59,6 +59,7 @@ namespace FinDesk.ViewModels
                 {
                     _selectedGroup = value;
                     OnPropertyChanged(nameof(SelectedGroup));
+                    CommandManager.InvalidateRequerySuggested();
                     LoadGroupDetails();
                 }
             }
@@ -73,6 +74,7 @@ namespace FinDesk.ViewModels
                 {
                     _newGroupName = value;
                     OnPropertyChanged(nameof(NewGroupName));
+                    CommandManager.InvalidateRequerySuggested();
                 }
             }
         }

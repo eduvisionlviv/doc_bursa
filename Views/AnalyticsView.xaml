@@ -146,6 +146,19 @@
                     </Border>
                 </Grid>
 
+                <Border Background="#FAFAFA" Padding="20" CornerRadius="8" Margin="0,0,0,20">
+                    <StackPanel>
+                        <TextBlock Text="🌊 Кеш-флоу по днях"
+                                   FontSize="18"
+                                   FontWeight="Bold"
+                                   Margin="0,0,0,15"/>
+                        <lvc:CartesianChart Series="{Binding CashFlowSeries}"
+                                            XAxes="{Binding CashFlowAxes}"
+                                            LegendPosition="Top"
+                                            Height="260"/>
+                    </StackPanel>
+                </Border>
+
                 <Border Background="#FAFAFA" Padding="20" CornerRadius="8">
                     <StackPanel>
                         <TextBlock Text="🏆 Топ-10 Категорій" 
