@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using FinDesk.Models;
 using Microsoft.Data.Sqlite;
 using Serilog;
@@ -516,6 +517,8 @@ namespace FinDesk.Services
             command.ExecuteNonQuery();
         }
 
+        public Task AddDataSourceAsync(DataSource source) => Task.Run(() => AddDataSource(source));
+
         /// <summary>
         /// Оновити існуюче джерело даних.
         /// </summary>
@@ -586,6 +589,8 @@ namespace FinDesk.Services
 
             return sources;
         }
+
+        public Task<List<DataSource>> GetDataSourcesAsync() => Task.Run(GetDataSources);
 
         // Category Rules
         /// <summary>

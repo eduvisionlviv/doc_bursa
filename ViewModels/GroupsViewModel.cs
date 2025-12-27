@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using System.Windows.Input;
 using FinDesk.Models;
 using FinDesk.Services;
-using FinDesk.Models;
 using FinDesk.Services;
 
 namespace FinDesk.ViewModels
@@ -363,4 +362,3 @@ namespace FinDesk.ViewModels
         }
     }
 }
-
