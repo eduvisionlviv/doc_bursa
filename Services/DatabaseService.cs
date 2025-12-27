@@ -4,11 +4,11 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using FinDesk.Models;
+using doc_bursa.Models;
 using Microsoft.Data.Sqlite;
 using Serilog;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     /// <summary>
     /// Робота з локальною SQLite базою даних.
@@ -169,6 +169,58 @@ namespace FinDesk.Services
 
             _logger.Information("Transaction saved: {TransactionId}", transaction.TransactionId);
         }
+
+        /// <summary>
+        /// Масово зберігає транзакції в одній транзакції SQLite для підвищення продуктивності.
+        /// </summary>
+        public void SaveTransactions(IEnumerable<Transaction> transactions)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+            using var dbTransaction = connection.BeginTransaction();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                INSERT OR REPLACE INTO Transactions 
+                (TransactionId, Date, Amount, Description, Category, Source, Account, Balance, Hash, IsDuplicate, OriginalTransactionId)
+                VALUES ($tid, $date, $amount, $desc, $cat, $src, $account, $balance, $hash, $isDuplicate, $originalTid)
+            ";
+
+            var tidParam = command.Parameters.Add("$tid", SqliteType.Text);
+            var dateParam = command.Parameters.Add("$date", SqliteType.Text);
+            var amountParam = command.Parameters.Add("$amount", SqliteType.Real);
+            var descParam = command.Parameters.Add("$desc", SqliteType.Text);
+            var catParam = command.Parameters.Add("$cat", SqliteType.Text);
+            var srcParam = command.Parameters.Add("$src", SqliteType.Text);
+            var accountParam = command.Parameters.Add("$account", SqliteType.Text);
+            var balanceParam = command.Parameters.Add("$balance", SqliteType.Real);
+            var hashParam = command.Parameters.Add("$hash", SqliteType.Text);
+            var isDuplicateParam = command.Parameters.Add("$isDuplicate", SqliteType.Integer);
+            var originalTidParam = command.Parameters.Add("$originalTid", SqliteType.Text);
+
+            foreach (var transaction in transactions)
+            {
+                tidParam.Value = transaction.TransactionId;
+                dateParam.Value = transaction.Date.ToString("o");
+                amountParam.Value = transaction.Amount;
+                descParam.Value = transaction.Description ?? string.Empty;
+                catParam.Value = transaction.Category ?? "Інше";
+                srcParam.Value = transaction.Source ?? string.Empty;
+                accountParam.Value = transaction.Account ?? string.Empty;
+                balanceParam.Value = transaction.Balance;
+                hashParam.Value = transaction.Hash ?? string.Empty;
+                isDuplicateParam.Value = transaction.IsDuplicate ? 1 : 0;
+                originalTidParam.Value = transaction.OriginalTransactionId ?? string.Empty;
+
+                command.ExecuteNonQuery();
+            }
+
+            dbTransaction.Commit();
+            _logger.Information("Batch saved: {Count} transactions", transactions.Count());
+        }
+
+        public Task SaveTransactionsAsync(IEnumerable<Transaction> transactions, CancellationToken cancellationToken = default)
+            => Task.Run(() => SaveTransactions(transactions), cancellationToken);
 
         /// <summary>
         /// Додати транзакцію з обробкою помилок.
@@ -518,7 +570,8 @@ namespace FinDesk.Services
             command.ExecuteNonQuery();
         }
 
-        public Task AddDataSourceAsync(DataSource source) => Task.Run(() => AddDataSource(source));
+        public Task AddDataSourceAsync(DataSource source, CancellationToken cancellationToken = default)
+            => Task.Run(() => AddDataSource(source), cancellationToken);
         public Task UpdateDataSourceAsync(DataSource source, CancellationToken cancellationToken = default)
             => Task.Run(() => UpdateDataSource(source), cancellationToken);
 

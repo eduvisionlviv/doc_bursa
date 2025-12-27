@@ -1,8 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
-using FinDesk.ViewModels;
+using doc_bursa.ViewModels;
 
-namespace FinDesk.Views
+namespace doc_bursa.Views
 {
     public partial class GroupsView : UserControl
     {

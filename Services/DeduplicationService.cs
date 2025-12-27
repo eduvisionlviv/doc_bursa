@@ -3,10 +3,10 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using FinDesk.Models;
+using doc_bursa.Models;
 using Serilog;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     /// <summary>
     /// Сервіс хеш-базової дедуплікації транзакцій.

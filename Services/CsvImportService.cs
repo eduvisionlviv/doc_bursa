@@ -4,11 +4,13 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
-using FinDesk.Models;
+using System.Threading;
+using System.Threading.Tasks;
+using doc_bursa.Models;
 using FluentValidation;
 using Serilog;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     public class CsvImportService
     {
@@ -54,29 +56,52 @@ namespace FinDesk.Services
 
         public CsvImportResult ImportFromCsv(string filePath, string? bankType = null)
         {
+            return ImportFromCsvAsync(filePath, bankType).GetAwaiter().GetResult();
+        }
+
+        public async Task<CsvImportResult> ImportFromCsvAsync(
+            string filePath,
+            string? bankType = null,
+            IProgress<int>? progress = null,
+            CancellationToken cancellationToken = default)
+        {
             try
             {
-                var lines = ReadAllLinesWithEncodingFallback(filePath, out var usedEncoding);
-                if (lines.Length < 2)
+                var usedEncoding = DetectEncodingWithFallback(filePath);
+                using var reader = new StreamReader(filePath, usedEncoding, detectEncodingFromByteOrderMarks: true);
+
+                var headerLine = await reader.ReadLineAsync(cancellationToken);
+                if (string.IsNullOrWhiteSpace(headerLine))
                 {
-                    return CsvImportResult.Error($"Файл порожній або не містить даних ({usedEncoding?.WebName ?? "невідоме кодування"})");
+                    return CsvImportResult.Error($"Файл порожній або не містить даних ({usedEncoding.WebName})");
                 }
 
-                var delimiter = DetectDelimiter(lines[0]);
-                var headers = SplitCsvLine(lines[0], delimiter)
-                    .Select(h => h.Trim('"', '\\', ' '))
+                var delimiter = DetectDelimiter(headerLine);
+                var headers = SplitCsvLine(headerLine, delimiter)
+                    .Select(h => h.Trim('\"', '\\', ' '))
                     .ToArray();
 
                 var format = ResolveFormat(bankType, headers);
                 var profile = CsvFormatProfiles.GetProfile(format);
-
-                var total = lines.Length - 1;
-                var result = new CsvImportResult(total) { EncodingUsed = usedEncoding?.WebName ?? "unknown", Format = format.ToString() };
-
-                for (int i = 1; i < lines.Length; i++)
+                var result = new CsvImportResult(0)
                 {
-                    var lineNumber = i + 1; // 1-based including header
-                    var values = SplitCsvLine(lines[i], delimiter);
+                    EncodingUsed = usedEncoding.WebName,
+                    Format = format.ToString()
+                };
+
+                const int batchSize = 1000;
+                var batch = new List<Transaction>(batchSize);
+                var processed = 0;
+
+                while (!reader.EndOfStream)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var line = await reader.ReadLineAsync(cancellationToken) ?? string.Empty;
+                    processed++;
+                    var lineNumber = processed + 1; // include header
+
+                    var values = SplitCsvLine(line, delimiter);
                     var rowDict = BuildRowDictionary(headers, values);
                     var mapped = profile.Map(rowDict);
 
@@ -102,22 +127,29 @@ namespace FinDesk.Services
                         continue;
                     }
 
-                    if (_transactionService.AddTransaction(transaction))
-                    {
-                        result.Imported++;
-                    }
-                    else
-                    {
-                        result.Skipped++;
-                        result.Errors.Add($"Рядок {lineNumber}: транзакцію пропущено (можливий дублікат або помилка бази)");
-                    }
+                    batch.Add(transaction);
 
-                    var progressMessage = $"{result.Imported + result.Skipped} з {total}: {transaction.Description} ({transaction.Amount})";
-                    result.ProgressLog.Add(progressMessage);
-                    _logger.Information(progressMessage);
+                    if (batch.Count >= batchSize)
+                    {
+                        var saved = await _transactionService.AddTransactionsBatchAsync(batch, cancellationToken);
+                        result.Imported += saved;
+                        batch.Clear();
+                        progress?.Report(processed);
+                    }
                 }
 
+                if (batch.Any())
+                {
+                    var saved = await _transactionService.AddTransactionsBatchAsync(batch, cancellationToken);
+                    result.Imported += saved;
+                }
+
+                result.Total = processed;
                 return result;
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
             }
             catch (Exception ex)
             {
@@ -126,36 +158,24 @@ namespace FinDesk.Services
             }
         }
 
-        private static Encoding? GetEncodingSafe(int codepage)
-        {
-            try
-            {
-                return Encoding.GetEncoding(codepage);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
-        private static string[] ReadAllLinesWithEncodingFallback(string filePath, out Encoding? usedEncoding)
+        private static Encoding DetectEncodingWithFallback(string filePath)
         {
             foreach (var enc in _candidateEncodings.Where(e => e != null))
             {
                 try
                 {
-                    var lines = File.ReadAllLines(filePath, enc!);
-                    usedEncoding = enc;
-                    return lines;
+                    using var reader = new StreamReader(filePath, enc!, detectEncodingFromByteOrderMarks: true);
+                    // attempt to read a single line to validate encoding
+                    reader.ReadLine();
+                    return enc!;
                 }
-                catch
+                catch (DecoderFallbackException)
                 {
                     // try next
                 }
             }
 
-            usedEncoding = Encoding.UTF8;
-            return File.ReadAllLines(filePath, Encoding.UTF8);
+            return new UTF8Encoding(false, true);
         }
 
         private static char DetectDelimiter(string headerLine)
@@ -309,7 +329,7 @@ namespace FinDesk.Services
         public List<string> ProgressLog { get; } = new();
         public string EncodingUsed { get; set; } = string.Empty;
         public string Format { get; set; } = string.Empty;
-        public int Total { get; }
+        public int Total { get; set; }
 
         public CsvImportResult(int total)
         {

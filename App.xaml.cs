@@ -1,11 +1,11 @@
 using System;
 using System.IO;
 using System.Windows;
-using FinDesk.Services;
+using doc_bursa.Services;
 using Serilog;
 using Serilog.Events;
 
-namespace FinDesk
+namespace doc_bursa
 {
     public partial class App : Application
     {
@@ -18,7 +18,7 @@ namespace FinDesk
 
             AppDataPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-                "FinDesk"
+                "doc_bursa"
             );
 
             if (!Directory.Exists(AppDataPath))
@@ -27,7 +27,7 @@ namespace FinDesk
             }
 
             ConfigureLogging();
-            Log.Information("FinDesk application starting.");
+            Log.Information("doc_bursa application starting.");
 
             // Запуск фонової дедуплікації
             var db = new DatabaseService();
@@ -39,7 +39,7 @@ namespace FinDesk
         protected override void OnExit(ExitEventArgs e)
         {
             _deduplicationBackgroundTask?.Dispose();
-            Log.Information("FinDesk application shutting down.");
+            Log.Information("doc_bursa application shutting down.");
             Log.CloseAndFlush();
             base.OnExit(e);
         }

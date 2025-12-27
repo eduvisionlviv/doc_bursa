@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using FinDesk.Models;
-using FinDesk.Services;
+using System.Runtime.Caching;
+using doc_bursa.Models;
+using doc_bursa.Services;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     /// <summary>
     /// Сервіс для аналітики фінансових даних
@@ -12,6 +13,8 @@ namespace FinDesk.Services
     public class AnalyticsService
     {
         private readonly DatabaseService _databaseService;
+        private readonly MemoryCache _cache = MemoryCache.Default;
+        private readonly CacheItemPolicy _defaultPolicy = new() { SlidingExpiration = TimeSpan.FromMinutes(5) };
 
         public AnalyticsService(DatabaseService databaseService)
         {
@@ -89,6 +92,12 @@ namespace FinDesk.Services
         /// </summary>
         public Dictionary<string, decimal> GetTransactionsByCategory(string accountNumber, DateTime? startDate = null, DateTime? endDate = null)
         {
+            var cacheKey = $"cat:{accountNumber}:{startDate?.ToString("o") ?? "null"}:{endDate?.ToString("o") ?? "null"}";
+            if (_cache.Get(cacheKey) is Dictionary<string, decimal> cachedCategories)
+            {
+                return cachedCategories;
+            }
+
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
             
             if (startDate.HasValue)
@@ -97,9 +106,12 @@ namespace FinDesk.Services
             if (endDate.HasValue)
                 transactions = transactions.Where(t => t.Date <= endDate.Value).ToList();
 
-            return transactions
+            var result = transactions
                 .GroupBy(t => t.Category ?? "Не визначено")
                 .ToDictionary(g => g.Key, g => g.Sum(t => Math.Abs(t.Amount)));
+
+            _cache.Set(cacheKey, result, _defaultPolicy);
+            return result;
         }
 
         /// <summary>
@@ -107,6 +119,12 @@ namespace FinDesk.Services
         /// </summary>
         public Dictionary<string, MonthlyStatistics> GetMonthlyStatistics(string accountNumber, int year)
         {
+            var cacheKey = $"monthly:{accountNumber}:{year}";
+            if (_cache.Get(cacheKey) is Dictionary<string, MonthlyStatistics> cachedMonthly)
+            {
+                return cachedMonthly;
+            }
+
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber)
                 .Where(t => t.Date.Year == year)
                 .ToList();
@@ -127,6 +145,7 @@ namespace FinDesk.Services
                     }
                 );
 
+            _cache.Set(cacheKey, monthlyStats, _defaultPolicy);
             return monthlyStats;
         }
 
@@ -242,4 +261,3 @@ namespace FinDesk.Services
         public decimal TransactionGrowth { get; set; }
     }
 }
-

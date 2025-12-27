@@ -3,11 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using ClosedXML.Excel;
-using FinDesk.Models;
+using doc_bursa.Models;
 
-namespace FinDesk.Services
+namespace doc_bursa.Services
 {
     public class ExportService
     {
@@ -233,14 +234,14 @@ namespace FinDesk.Services
         }
 
         // Імпорт транзакцій з CSV
-        public Task<List<Transaction>> ImportFromCsvAsync(string filePath)
+        public async Task<List<Transaction>> ImportFromCsvAsync(string filePath, CancellationToken cancellationToken = default)
         {
             var db = new DatabaseService();
             var dedup = new DeduplicationService(db);
             var txService = new TransactionService(db, dedup);
             var service = new CsvImportService(db, new CategorizationService(db), txService);
-            service.ImportFromCsv(filePath);
-            return Task.FromResult(new List<Transaction>()); // keeping signature but functionality moved to CsvImportService
+            await service.ImportFromCsvAsync(filePath, cancellationToken: cancellationToken);
+            return new List<Transaction>(); // keeping signature but functionality moved to CsvImportService
         }
     }
 }

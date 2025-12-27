@@ -4,10 +4,16 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using FinDesk.Models;
-using FinDesk.Services;
+using CommunityToolkit.Mvvm.Input;
+using doc_bursa.Models;
+using doc_bursa.Services;
+using LiveChartsCore;
+using LiveChartsCore.Measure;
+using LiveChartsCore.SkiaSharpView;
+using LiveChartsCore.SkiaSharpView.Painting;
+using SkiaSharp;
 
-namespace FinDesk.ViewModels
+namespace doc_bursa.ViewModels
 {
     public class AnalyticsViewModel : ViewModelBase
     {
@@ -54,6 +60,41 @@ namespace FinDesk.ViewModels
             }
         }
 
+        private ISeries[] _trendSeries = Array.Empty<ISeries>();
+        public ISeries[] TrendSeries
+        {
+            get => _trendSeries;
+            set => SetProperty(ref _trendSeries, value);
+        }
+
+        private Axis[] _trendAxes = new[] { new Axis { Labels = Array.Empty<string>() } };
+        public Axis[] TrendAxes
+        {
+            get => _trendAxes;
+            set => SetProperty(ref _trendAxes, value);
+        }
+
+        private ISeries[] _categorySeries = Array.Empty<ISeries>();
+        public ISeries[] CategorySeries
+        {
+            get => _categorySeries;
+            set => SetProperty(ref _categorySeries, value);
+        }
+
+        private ISeries[] _debitCreditSeries = Array.Empty<ISeries>();
+        public ISeries[] DebitCreditSeries
+        {
+            get => _debitCreditSeries;
+            set => SetProperty(ref _debitCreditSeries, value);
+        }
+
+        private Axis[] _debitCreditAxes = new[] { new Axis { Labels = new[] { "Дохід", "Витрати" } } };
+        public Axis[] DebitCreditAxes
+        {
+            get => _debitCreditAxes;
+            set => SetProperty(ref _debitCreditAxes, value);
+        }
+
         // Колекції
         public ObservableCollection<Category> TopCategories { get; set; }
         public ObservableCollection<string> Periods { get; set; }
@@ -65,7 +106,7 @@ namespace FinDesk.ViewModels
         public AnalyticsViewModel()
         {
             _db = new DatabaseService();
-            _analytics = new AnalyticsService();
+            _analytics = new AnalyticsService(_db);
 
             TopCategories = new ObservableCollection<Category>();
             Periods = new ObservableCollection<string>
@@ -91,8 +132,8 @@ namespace FinDesk.ViewModels
             {
                 var (startDate, endDate) = GetDateRange(SelectedPeriod);
                 var transactions = await _db.GetTransactionsAsync();
-                var filtered = transactions.Where(t => 
-                    t.TransactionDate >= startDate && 
+                var filtered = transactions.Where(t =>
+                    t.TransactionDate >= startDate &&
                     t.TransactionDate <= endDate).ToList();
 
                 // Розрахунок статистики
@@ -109,18 +150,78 @@ namespace FinDesk.ViewModels
                 foreach (var cat in categoryStats.OrderByDescending(c => Math.Abs(c.Value)).Take(10))
                 {
                     var count = filtered.Count(t => t.Category == cat.Key);
-                    TopCategories.Add(new Category 
-                    { 
-                        Name = cat.Key, 
+                    TopCategories.Add(new Category
+                    {
+                        Name = cat.Key,
                         Amount = cat.Value,
                         Count = count
                     });
                 }
+
+                BuildSeries(filtered);
             }
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Analytics Load Error: {ex.Message}");
             }
+        }
+
+        private void BuildSeries(List<Transaction> filtered)
+        {
+            var monthly = filtered
+                .GroupBy(t => new { t.TransactionDate.Year, t.TransactionDate.Month })
+                .OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month)
+                .Select(g => new
+                {
+                    Label = $"{g.Key.Month:D2}.{g.Key.Year}",
+                    Balance = g.Sum(t => t.Amount)
+                })
+                .ToList();
+
+            TrendAxes = new[]
+            {
+                new Axis { Labels = monthly.Select(m => m.Label).ToArray(), LabelsRotation = 15 }
+            };
+
+            TrendSeries = new ISeries[]
+            {
+                new LineSeries<double>
+                {
+                    Name = "Баланс",
+                    Values = monthly.Select(m => (double)m.Balance).ToArray(),
+                    GeometrySize = 8,
+                    Fill = null,
+                    Stroke = new SolidColorPaint(SKColors.DeepSkyBlue) { StrokeThickness = 2 }
+                }
+            };
+
+            CategorySeries = TopCategories
+                .Select(cat => new PieSeries<double>
+                {
+                    Name = cat.Name ?? "Невідомо",
+                    Values = new[] { Math.Abs((double)cat.Amount) },
+                    DataLabelsPosition = PolarLabelsPosition.OutsideSlice,
+                    DataLabelsSize = 12,
+                    DataLabelsPaint = new SolidColorPaint(SKColors.Black)
+                })
+                .Cast<ISeries>()
+                .ToArray();
+
+            DebitCreditSeries = new ISeries[]
+            {
+                new ColumnSeries<double>
+                {
+                    Name = "Дохід",
+                    Values = new[] { (double)TotalIncome },
+                    Fill = new SolidColorPaint(SKColors.SeaGreen)
+                },
+                new ColumnSeries<double>
+                {
+                    Name = "Витрати",
+                    Values = new[] { (double)TotalExpenses },
+                    Fill = new SolidColorPaint(SKColors.OrangeRed)
+                }
+            };
         }
 
         private (DateTime start, DateTime end) GetDateRange(string period)
