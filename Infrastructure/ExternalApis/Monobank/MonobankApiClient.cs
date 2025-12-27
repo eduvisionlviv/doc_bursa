@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -22,6 +24,7 @@ namespace FinDesk.Infrastructure.ExternalApis.Monobank
             }
 
             _httpClient = httpClient ?? MonobankHttpClientFactory.Create(token);
+            EnsureTokenHeader(_httpClient, token);
             _logger = logger ?? CreateDefaultLogger();
         }
 
@@ -111,6 +114,17 @@ namespace FinDesk.Infrastructure.ExternalApis.Monobank
             }
 
             return result;
+        }
+
+        private static void EnsureTokenHeader(HttpClient client, string token)
+        {
+            client.DefaultRequestHeaders.Remove("X-Token");
+            client.DefaultRequestHeaders.Add("X-Token", token);
+
+            if (!client.DefaultRequestHeaders.Accept.Any())
+            {
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            }
         }
 
         private static ILogger CreateDefaultLogger()
