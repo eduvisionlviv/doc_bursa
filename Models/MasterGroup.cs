@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace FinDesk.Models
@@ -18,6 +19,7 @@ namespace FinDesk.Models
         private bool _isActive;
         private string _color;
 
+        [Key]
         public int Id
         {
             get => _id;
@@ -102,6 +104,11 @@ namespace FinDesk.Models
         public ObservableCollection<string> AccountNumbers { get; set; }
 
         /// <summary>
+        /// Посилання на зв'язки з групами рахунків.
+        /// </summary>
+        public ICollection<MasterGroupAccountGroup> AccountGroupLinks { get; set; } = new List<MasterGroupAccountGroup>();
+
+        /// <summary>
         /// Загальна сума по всіх рахунках групи
         /// </summary>
         public decimal TotalBalance
@@ -171,4 +178,3 @@ namespace FinDesk.Models
         }
     }
 }
-

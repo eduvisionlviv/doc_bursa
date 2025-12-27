@@ -3,67 +3,124 @@ using System.ComponentModel.DataAnnotations;
 
 namespace FinDesk.Models
 {
-    // Модель бюджету для контролю витрат та прибутків
+    /// <summary>
+    /// Модель бюджету для контролю витрат та прибутків.
+    /// </summary>
     public class Budget
     {
         [Key]
-        public int Id { get; set; }
+        public Guid Id { get; set; } = Guid.NewGuid();
 
-        // Назва бюджету
+        /// <summary>
+        /// Назва бюджету.
+        /// </summary>
         [Required]
-        [MaxLength(100)]
-        public string Name { get; set; }
+        [MaxLength(120)]
+        public string Name { get; set; } = string.Empty;
 
-        // Категорія для якої встановлено бюджет
+        /// <summary>
+        /// Категорія для якої встановлено бюджет.
+        /// </summary>
         [MaxLength(100)]
-        public string Category { get; set; }
+        public string Category { get; set; } = string.Empty;
 
-        // Ліміт бюджету
+        /// <summary>
+        /// Ліміт бюджету.
+        /// </summary>
         [Required]
         public decimal Limit { get; set; }
 
-        // Поточна витрачена сума
-        public decimal Spent { get; set; }
+        /// <summary>
+        /// Поточна витрачена сума.
+        /// </summary>
+        public decimal Spent { get; private set; }
 
-        // Період бюджету (щомісячний, щотижневий, щорічний)
+        /// <summary>
+        /// Період бюджету.
+        /// </summary>
         [Required]
-        [MaxLength(20)]
-        public string Period { get; set; } // "Monthly", "Weekly", "Yearly"
+        public BudgetFrequency Frequency { get; set; } = BudgetFrequency.Monthly;
 
-        // Дата початку періоду
-        public DateTime StartDate { get; set; }
+        /// <summary>
+        /// Дата початку періоду.
+        /// </summary>
+        public DateTime StartDate { get; set; } = DateTime.UtcNow.Date;
 
-        // Дата закінчення періоду
-        public DateTime EndDate { get; set; }
+        /// <summary>
+        /// Дата закінчення періоду (якщо застосовується).
+        /// </summary>
+        public DateTime? EndDate { get; set; }
 
-        // Чи активний бюджет
+        /// <summary>
+        /// Чи активний бюджет.
+        /// </summary>
         public bool IsActive { get; set; } = true;
 
-        // Сповіщення при досягненні відсотка використання
-        public int AlertThreshold { get; set; } = 80; // За замовчуванням 80%
+        /// <summary>
+        /// Поріг сповіщення у відсотках.
+        /// </summary>
+        public int AlertThreshold { get; set; } = 80;
 
-        // Опис бюджету
+        /// <summary>
+        /// Опис бюджету.
+        /// </summary>
         [MaxLength(500)]
-        public string Description { get; set; }
+        public string Description { get; set; } = string.Empty;
 
-        // Дата створення
-        public DateTime CreatedAt { get; set; } = DateTime.Now;
+        /// <summary>
+        /// Дата створення запису.
+        /// </summary>
+        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
-        // Дата останнього оновлення
+        /// <summary>
+        /// Дата останнього оновлення.
+        /// </summary>
         public DateTime? UpdatedAt { get; set; }
 
-        // Розраховані властивості
-        
-        // Залишок бюджету
+        /// <summary>
+        /// Залишок бюджету.
+        /// </summary>
         public decimal Remaining => Limit - Spent;
 
-        // Відсоток використання бюджету
-        public decimal UsagePercentage => Limit > 0 ? (Spent / Limit) * 100 : 0;
+        /// <summary>
+        /// Відсоток використання бюджету.
+        /// </summary>
+        public decimal UsagePercentage => Limit > 0 ? Math.Round((Spent / Limit) * 100, 2) : 0;
 
-        // Чи перевищено бюджет
+        /// <summary>
+        /// Чи перевищено бюджет.
+        /// </summary>
         public bool IsOverBudget => Spent > Limit;
 
-        // Чи досягнуто порогу сповіщення
+        /// <summary>
+        /// Чи досягнуто порогу сповіщення.
+        /// </summary>
         public bool ShouldAlert => UsagePercentage >= AlertThreshold;
+
+        /// <summary>
+        /// Зареєструвати нову витрату.
+        /// </summary>
+        public void RegisterExpense(decimal amount)
+        {
+            if (amount < 0)
+            {
+                throw new ArgumentOutOfRangeException(nameof(amount), "Amount must be non-negative.");
+            }
+
+            Spent += amount;
+            UpdatedAt = DateTime.UtcNow;
+        }
+
+        /// <summary>
+        /// Скинути показники для нового періоду.
+        /// </summary>
+        public void ResetPeriod(BudgetFrequency? newFrequency = null, DateTime? startDate = null)
+        {
+            Spent = 0;
+            Frequency = newFrequency ?? Frequency;
+            StartDate = startDate?.Date ?? DateTime.UtcNow.Date;
+            EndDate = null;
+            UpdatedAt = DateTime.UtcNow;
+        }
     }
 }

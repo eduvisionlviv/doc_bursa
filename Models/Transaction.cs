@@ -1,20 +1,53 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace FinDesk.Models
 {
+    /// <summary>
+    /// Фінансова транзакція у системі.
+    /// </summary>
     public class Transaction
     {
+        [Key]
         public int Id { get; set; }
+
+        [Required]
+        [MaxLength(128)]
         public string TransactionId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Дата транзакції в базовій моделі.
+        /// </summary>
         public DateTime Date { get; set; }
+
+        /// <summary>
+        /// Альтернативна назва для сумісності з сервісами.
+        /// </summary>
+        public DateTime TransactionDate
+        {
+            get => Date;
+            set => Date = value;
+        }
+
         public decimal Amount { get; set; }
+
+        [MaxLength(256)]
         public string Description { get; set; } = string.Empty;
+
+        [MaxLength(100)]
         public string Category { get; set; } = "Інше";
+
+        [MaxLength(120)]
         public string Source { get; set; } = string.Empty;
+
+        [MaxLength(120)]
+        public string Account { get; set; } = string.Empty;
+
+        public decimal Balance { get; set; }
+
         public string Type => Amount >= 0 ? "Дохід" : "Витрата";
+
+        [MaxLength(128)]
         public string Hash { get; set; } = string.Empty;
     }
 }
-
-
-
