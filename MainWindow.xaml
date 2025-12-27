@@ -5,19 +5,20 @@
         Title="doc_bursa - Управління фінансами" 
         Height="700" Width="1200"
         WindowStartupLocation="CenterScreen"
-        Background="#F5F5F5">
+        Background="#0B1220"
+        Foreground="#E5E7EB">
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="200"/>
             <ColumnDefinition Width="*"/>
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="0" Background="#2C3E50" Padding="0">
+        <Border Grid.Column="0" Background="#111827" Padding="0">
             <StackPanel>
                 <TextBlock Text="doc_bursa" 
                           FontSize="24" 
                           FontWeight="Bold" 
-                          Foreground="White" 
+                          Foreground="#E5E7EB" 
                           Margin="20,30,20,40"
                           HorizontalAlignment="Center"/>
 

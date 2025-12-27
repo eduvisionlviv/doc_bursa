@@ -13,8 +13,8 @@
 
             <!-- Navigation Button Style -->
             <Style x:Key="NavButtonStyle" TargetType="Button">
-                <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="Foreground" Value="White"/>
+                <Setter Property="Background" Value="#1F2937"/>
+                <Setter Property="Foreground" Value="#E5E7EB"/>
                 <Setter Property="BorderThickness" Value="0"/>
                 <Setter Property="Padding" Value="20,15"/>
                 <Setter Property="HorizontalContentAlignment" Value="Left"/>
@@ -35,17 +35,17 @@
                 </Setter>
                 <Style.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
-                        <Setter Property="Background" Value="#34495E"/>
+                        <Setter Property="Background" Value="#374151"/>
                     </Trigger>
                     <Trigger Property="IsPressed" Value="True">
-                        <Setter Property="Background" Value="#1ABC9C"/>
+                        <Setter Property="Background" Value="#10B981"/>
                     </Trigger>
                 </Style.Triggers>
             </Style>
 
             <!-- Card Style for Material Design look -->
             <Style x:Key="CardStyle" TargetType="Border">
-                <Setter Property="Background" Value="White"/>
+                <Setter Property="Background" Value="#111827"/>
                 <Setter Property="CornerRadius" Value="8"/>
                 <Setter Property="Padding" Value="20"/>
                 <Setter Property="Margin" Value="10"/>
@@ -53,9 +53,9 @@
                     <Setter.Value>
                         <DropShadowEffect BlurRadius="10" 
                                           ShadowDepth="2" 
-                                          Opacity="0.2" 
-                                          Color="#000000"/>
-                    </Setter.Value>
+                      Opacity="0.2" 
+                      Color="#000000"/>
+                </Setter.Value>
                 </Setter>
                 <Style.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">

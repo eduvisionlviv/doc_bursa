@@ -77,11 +77,33 @@ namespace FinDesk.Services
                     Color TEXT,
                     AccountNumbers TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS RecurringTransactions (
+                    Id TEXT PRIMARY KEY,
+                    Description TEXT NOT NULL,
+                    Amount REAL NOT NULL,
+                    Category TEXT,
+                    AccountId TEXT,
+                    Frequency TEXT NOT NULL,
+                    Interval INTEGER NOT NULL,
+                    StartDate TEXT NOT NULL,
+                    EndDate TEXT,
+                    NextOccurrence TEXT NOT NULL,
+                    LastOccurrence TEXT,
+                    OccurrenceCount INTEGER,
+                    IsActive INTEGER,
+                    AutoExecute INTEGER,
+                    ReminderDays INTEGER,
+                    Notes TEXT,
+                    CreatedAt TEXT NOT NULL,
+                    UpdatedAt TEXT
+                );
             ";
             command.ExecuteNonQuery();
 
             EnsureTransactionColumns(connection);
             EnsureBudgetTable(connection);
+            EnsureRecurringTransactionsTable(connection);
         }
 
         private static void EnsureTransactionColumns(SqliteConnection connection)
@@ -132,6 +154,35 @@ namespace FinDesk.Services
                     IsActive INTEGER NOT NULL,
                     AlertThreshold INTEGER NOT NULL,
                     Description TEXT,
+                    CreatedAt TEXT NOT NULL,
+                    UpdatedAt TEXT
+                );
+            ";
+
+            command.ExecuteNonQuery();
+        }
+
+        private static void EnsureRecurringTransactionsTable(SqliteConnection connection)
+        {
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                CREATE TABLE IF NOT EXISTS RecurringTransactions (
+                    Id TEXT PRIMARY KEY,
+                    Description TEXT NOT NULL,
+                    Amount REAL NOT NULL,
+                    Category TEXT,
+                    AccountId TEXT,
+                    Frequency TEXT NOT NULL,
+                    Interval INTEGER NOT NULL,
+                    StartDate TEXT NOT NULL,
+                    EndDate TEXT,
+                    NextOccurrence TEXT NOT NULL,
+                    LastOccurrence TEXT,
+                    OccurrenceCount INTEGER,
+                    IsActive INTEGER,
+                    AutoExecute INTEGER,
+                    ReminderDays INTEGER,
+                    Notes TEXT,
                     CreatedAt TEXT NOT NULL,
                     UpdatedAt TEXT
                 );
@@ -552,6 +603,131 @@ namespace FinDesk.Services
 
             var command = connection.CreateCommand();
             command.CommandText = "DELETE FROM Budgets WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id.ToString());
+            command.ExecuteNonQuery();
+        }
+
+        // Recurring Transactions
+        public void SaveRecurringTransaction(RecurringTransaction recurring)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"
+                INSERT OR REPLACE INTO RecurringTransactions
+                (Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt)
+                VALUES ($id, $desc, $amount, $cat, $accountId, $freq, $interval, $start, $end, $next, $last, $count, $active, $auto, $reminder, $notes, $created, $updated)";
+
+            command.Parameters.AddWithValue("$id", recurring.Id.ToString());
+            command.Parameters.AddWithValue("$desc", recurring.Description);
+            command.Parameters.AddWithValue("$amount", recurring.Amount);
+            command.Parameters.AddWithValue("$cat", recurring.Category ?? string.Empty);
+            command.Parameters.AddWithValue("$accountId", recurring.AccountId?.ToString() ?? string.Empty);
+            command.Parameters.AddWithValue("$freq", recurring.Frequency.ToString());
+            command.Parameters.AddWithValue("$interval", recurring.Interval);
+            command.Parameters.AddWithValue("$start", recurring.StartDate.ToString("o"));
+            command.Parameters.AddWithValue("$end", recurring.EndDate?.ToString("o") ?? string.Empty);
+            command.Parameters.AddWithValue("$next", recurring.NextOccurrence.ToString("o"));
+            command.Parameters.AddWithValue("$last", recurring.LastOccurrence?.ToString("o") ?? string.Empty);
+            command.Parameters.AddWithValue("$count", recurring.OccurrenceCount);
+            command.Parameters.AddWithValue("$active", recurring.IsActive ? 1 : 0);
+            command.Parameters.AddWithValue("$auto", recurring.AutoExecute ? 1 : 0);
+            command.Parameters.AddWithValue("$reminder", recurring.ReminderDays);
+            command.Parameters.AddWithValue("$notes", recurring.Notes ?? string.Empty);
+            command.Parameters.AddWithValue("$created", recurring.CreatedAt.ToString("o"));
+            command.Parameters.AddWithValue("$updated", recurring.UpdatedAt?.ToString("o") ?? string.Empty);
+
+            command.ExecuteNonQuery();
+        }
+
+        public List<RecurringTransaction> GetRecurringTransactions(bool onlyActive = false)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"SELECT Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt 
+                                    FROM RecurringTransactions" + (onlyActive ? " WHERE IsActive = 1" : string.Empty);
+
+            var result = new List<RecurringTransaction>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var recurring = new RecurringTransaction
+                {
+                    Id = Guid.Parse(reader.GetString(0)),
+                    Description = reader.GetString(1),
+                    Amount = (decimal)reader.GetDouble(2),
+                    Category = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    AccountId = Guid.TryParse(reader.IsDBNull(4) ? null : reader.GetString(4), out var accountId) ? accountId : null,
+                    Frequency = Enum.TryParse<RecurrenceFrequency>(reader.GetString(5), true, out var freq) ? freq : RecurrenceFrequency.Monthly,
+                    Interval = reader.GetInt32(6),
+                    StartDate = DateTime.Parse(reader.GetString(7)),
+                    EndDate = reader.IsDBNull(8) || string.IsNullOrWhiteSpace(reader.GetString(8)) ? null : DateTime.Parse(reader.GetString(8)),
+                    NextOccurrence = DateTime.Parse(reader.GetString(9)),
+                    LastOccurrence = reader.IsDBNull(10) || string.IsNullOrWhiteSpace(reader.GetString(10)) ? null : DateTime.Parse(reader.GetString(10)),
+                    OccurrenceCount = reader.IsDBNull(11) ? 0 : reader.GetInt32(11),
+                    IsActive = !reader.IsDBNull(12) && reader.GetInt32(12) == 1,
+                    AutoExecute = !reader.IsDBNull(13) && reader.GetInt32(13) == 1,
+                    ReminderDays = reader.GetInt32(14),
+                    Notes = reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
+                    CreatedAt = DateTime.Parse(reader.GetString(16)),
+                    UpdatedAt = reader.IsDBNull(17) || string.IsNullOrWhiteSpace(reader.GetString(17)) ? null : DateTime.Parse(reader.GetString(17))
+                };
+
+                result.Add(recurring);
+            }
+
+            return result;
+        }
+
+        public RecurringTransaction? GetRecurringTransaction(Guid id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"SELECT Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt 
+                                    FROM RecurringTransactions WHERE Id = $id LIMIT 1";
+            command.Parameters.AddWithValue("$id", id.ToString());
+
+            using var reader = command.ExecuteReader();
+            if (!reader.Read())
+            {
+                return null;
+            }
+
+            return new RecurringTransaction
+            {
+                Id = Guid.Parse(reader.GetString(0)),
+                Description = reader.GetString(1),
+                Amount = (decimal)reader.GetDouble(2),
+                Category = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                AccountId = Guid.TryParse(reader.IsDBNull(4) ? null : reader.GetString(4), out var accountId) ? accountId : null,
+                Frequency = Enum.TryParse<RecurrenceFrequency>(reader.GetString(5), true, out var freq) ? freq : RecurrenceFrequency.Monthly,
+                Interval = reader.GetInt32(6),
+                StartDate = DateTime.Parse(reader.GetString(7)),
+                EndDate = reader.IsDBNull(8) || string.IsNullOrWhiteSpace(reader.GetString(8)) ? null : DateTime.Parse(reader.GetString(8)),
+                NextOccurrence = DateTime.Parse(reader.GetString(9)),
+                LastOccurrence = reader.IsDBNull(10) || string.IsNullOrWhiteSpace(reader.GetString(10)) ? null : DateTime.Parse(reader.GetString(10)),
+                OccurrenceCount = reader.IsDBNull(11) ? 0 : reader.GetInt32(11),
+                IsActive = !reader.IsDBNull(12) && reader.GetInt32(12) == 1,
+                AutoExecute = !reader.IsDBNull(13) && reader.GetInt32(13) == 1,
+                ReminderDays = reader.GetInt32(14),
+                Notes = reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
+                CreatedAt = DateTime.Parse(reader.GetString(16)),
+                UpdatedAt = reader.IsDBNull(17) || string.IsNullOrWhiteSpace(reader.GetString(17)) ? null : DateTime.Parse(reader.GetString(17))
+            };
+        }
+
+        public void DeleteRecurringTransaction(Guid id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM RecurringTransactions WHERE Id = $id";
             command.Parameters.AddWithValue("$id", id.ToString());
             command.ExecuteNonQuery();
         }

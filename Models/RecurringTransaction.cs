@@ -65,17 +65,17 @@ namespace FinDesk.Models
         /// <summary>
         /// Наступна дата виконання.
         /// </summary>
-        public DateTime NextOccurrence { get; private set; } = DateTime.UtcNow.Date;
+        public DateTime NextOccurrence { get; internal set; } = DateTime.UtcNow.Date;
 
         /// <summary>
         /// Остання дата виконання.
         /// </summary>
-        public DateTime? LastOccurrence { get; private set; }
+        public DateTime? LastOccurrence { get; internal set; }
 
         /// <summary>
         /// Кількість виконань.
         /// </summary>
-        public int OccurrenceCount { get; private set; }
+        public int OccurrenceCount { get; internal set; }
 
         /// <summary>
         /// Чи активна транзакція.
@@ -158,4 +158,3 @@ namespace FinDesk.Models
         }
     }
 }
-
