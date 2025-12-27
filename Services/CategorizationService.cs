@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using doc_bursa.Models;
 using Microsoft.ML;
 using Microsoft.ML.Data;
+using Microsoft.ML.Transforms.Text;
+using Serilog;
 
 namespace doc_bursa.Services
 {
@@ -17,6 +20,9 @@ namespace doc_bursa.Services
         private readonly MLContext _mlContext;
         private readonly LruCache<string, string> _predictionCache;
         private readonly List<(Regex pattern, string category)> _regexRules;
+        private readonly object _engineLock = new();
+        private readonly string _modelPath;
+        private readonly ILogger _logger;
         private ITransformer? _model;
         private PredictionEngine<TransactionTextData, TransactionCategoryPrediction>? _predictionEngine;
 
@@ -26,7 +32,13 @@ namespace doc_bursa.Services
             _mlContext = new MLContext(seed: 42);
             _predictionCache = new LruCache<string, string>(capacity: 1024);
             _regexRules = BuildRegexRules();
-            TrainModel();
+            _modelPath = Path.Combine(App.AppDataPath, "categorization-model.zip");
+            _logger = Log.ForContext<CategorizationService>();
+
+            if (!TryLoadModel())
+            {
+                TrainModel();
+            }
         }
 
         /// <summary>
@@ -65,15 +77,31 @@ namespace doc_bursa.Services
 
             var data = _mlContext.Data.LoadFromEnumerable(trainingSet);
 
-            var pipeline = _mlContext.Transforms.Text.FeaturizeText("DescriptionFeaturized", nameof(TransactionTextData.Description))
+            var textOptions = new TextFeaturizingEstimator.Options
+            {
+                CaseMode = TextNormalizingEstimator.CaseMode.Lower,
+                KeepDiacritics = false,
+                KeepPunctuations = false,
+                KeepNumbers = true,
+                WordFeatureExtractor = new WordBagEstimator.Options { NgramLength = 2, UseAllLengths = true },
+                CharFeatureExtractor = new WordBagEstimator.Options
+                {
+                    NgramLength = 3,
+                    UseAllLengths = true,
+                    MaximumNgramsCount = 4000
+                }
+            };
+
+            var pipeline = _mlContext.Transforms.Text.FeaturizeText("DescriptionFeaturized", textOptions, nameof(TransactionTextData.Description))
                 .Append(_mlContext.Transforms.NormalizeMinMax("AmountScaled", nameof(TransactionTextData.Amount)))
                 .Append(_mlContext.Transforms.Concatenate("Features", "DescriptionFeaturized", "AmountScaled"))
                 .Append(_mlContext.Transforms.Conversion.MapValueToKey("Label", nameof(TransactionTextData.Category)))
-                .Append(_mlContext.MulticlassClassification.Trainers.SdcaMaximumEntropy())
+                .Append(_mlContext.MulticlassClassification.Trainers.LbfgsMaximumEntropy())
                 .Append(_mlContext.Transforms.Conversion.MapKeyToValue("PredictedLabel"));
 
             _model = pipeline.Fit(data);
-            _predictionEngine = _mlContext.Model.CreatePredictionEngine<TransactionTextData, TransactionCategoryPrediction>(_model);
+            PersistModel(data.Schema);
+            ResetPredictionEngine();
         }
 
         /// <summary>
@@ -87,7 +115,7 @@ namespace doc_bursa.Services
             }
 
             var escaped = Regex.Escape(description.Trim());
-            var regex = new Regex($"{escaped}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            var regex = new Regex($"{escaped}", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
             _regexRules.Add((regex, category));
             _db.SaveCategoryRule(description.Trim(), category);
@@ -111,7 +139,8 @@ namespace doc_bursa.Services
 
         private string Predict(string description, decimal amount)
         {
-            if (_predictionEngine == null)
+            var engine = GetPredictionEngine();
+            if (engine == null)
             {
                 return amount >= 0 ? "Дохід" : "Інше";
             }
@@ -122,7 +151,12 @@ namespace doc_bursa.Services
                 Amount = (float)amount
             };
 
-            var prediction = _predictionEngine.Predict(input);
+            TransactionCategoryPrediction prediction;
+            lock (_engineLock)
+            {
+                prediction = engine.Predict(input);
+            }
+
             return prediction?.Category ?? (amount >= 0 ? "Дохід" : "Інше");
         }
 
@@ -197,7 +231,7 @@ namespace doc_bursa.Services
                 rules.Add((Regex.Escape(rule.Key), rule.Value));
             }
 
-            return rules.Select(r => (new Regex(r.pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant), r.category)).ToList();
+            return rules.Select(r => (new Regex(r.pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled), r.category)).ToList();
         }
 
         private sealed class TransactionTextData
@@ -257,8 +291,78 @@ namespace doc_bursa.Services
 
             return dataset;
         }
+
+        private bool TryLoadModel()
+        {
+            if (!File.Exists(_modelPath))
+            {
+                return false;
+            }
+
+            try
+            {
+                using var stream = File.OpenRead(_modelPath);
+                _model = _mlContext.Model.Load(stream, out _);
+                ResetPredictionEngine();
+                return _model != null;
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "Cannot load categorization model, will retrain");
+                _model = null;
+                _predictionEngine = null;
+                return false;
+            }
+        }
+
+        private void PersistModel(DataViewSchema schema)
+        {
+            if (_model == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var directory = Path.GetDirectoryName(_modelPath);
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                using var stream = File.Create(_modelPath);
+                _mlContext.Model.Save(_model, schema, stream);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning(ex, "Cannot persist categorization model");
+            }
+        }
+
+        private void ResetPredictionEngine()
+        {
+            lock (_engineLock)
+            {
+                _predictionEngine = _model != null
+                    ? _mlContext.Model.CreatePredictionEngine<TransactionTextData, TransactionCategoryPrediction>(_model)
+                    : null;
+            }
+        }
+
+        private PredictionEngine<TransactionTextData, TransactionCategoryPrediction>? GetPredictionEngine()
+        {
+            if (_predictionEngine != null)
+            {
+                return _predictionEngine;
+            }
+
+            lock (_engineLock)
+            {
+                _predictionEngine ??= _model != null
+                    ? _mlContext.Model.CreatePredictionEngine<TransactionTextData, TransactionCategoryPrediction>(_model)
+                    : null;
+                return _predictionEngine;
+            }
+        }
     }
 }
-
-
-

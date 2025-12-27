@@ -22,11 +22,15 @@ namespace doc_bursa.Services
         private static readonly Encoding[] _candidateEncodings =
         {
             new UTF8Encoding(false, true),
+            new UTF8Encoding(true, true),
             Encoding.Unicode,
             Encoding.BigEndianUnicode,
+            Encoding.UTF32,
             GetEncodingSafe(1251),
             Encoding.GetEncoding("iso-8859-1"),
-            GetEncodingSafe(1252)
+            GetEncodingSafe(1252),
+            GetEncodingSafe(866),
+            Encoding.ASCII
         };
 
         private static Encoding GetEncodingSafe(int codePage)
@@ -56,7 +60,16 @@ namespace doc_bursa.Services
             "dd.MM.yyyy HH:mm",
             "yyyy-MM-ddTHH:mm:ss",
             "dd/MM/yyyy HH:mm",
-            "dd.MM.yy"
+            "dd.MM.yy",
+            "yyyy.MM.dd",
+            "M/d/yyyy",
+            "MM/dd/yy",
+            "dd/MM/yy",
+            "yyyy-MM-dd HH:mm:ss",
+            "yyyy/MM/dd HH:mm",
+            "dd MMMM yyyy",
+            "dd-MM-yyyy HH:mm",
+            "yyyyMMddTHHmmss"
         };
 
         public CsvImportService(DatabaseService db, CategorizationService categorization, TransactionService transactionService)
@@ -95,7 +108,13 @@ namespace doc_bursa.Services
                     .Select(h => h.Trim('\"', '\\', ' '))
                     .ToArray();
 
-                var format = ResolveFormat(bankType, headers);
+                var previewLines = await ReadPreviewAsync(reader, cancellationToken);
+                var previewRows = previewLines
+                    .Select(l => SplitCsvLine(l, delimiter))
+                    .Where(r => r.Length > 0)
+                    .ToList();
+
+                var format = ResolveFormat(bankType, headers, previewRows);
                 var profile = CsvFormatProfiles.GetProfile(format);
                 var result = new CsvImportResult(0)
                 {
@@ -107,48 +126,26 @@ namespace doc_bursa.Services
                 var batch = new List<Transaction>(batchSize);
                 var processed = 0;
 
+                foreach (var preview in previewLines)
+                {
+                    processed++;
+                    if (!ProcessLine(preview, processed + 1, headers, delimiter, profile, format, batch, result, cancellationToken)
+                        && batch.Count >= batchSize)
+                    {
+                        await FlushBatchAsync(batch, result, cancellationToken, progress, processed);
+                    }
+                }
+
                 while (!reader.EndOfStream)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
 
                     var line = await reader.ReadLineAsync(cancellationToken) ?? string.Empty;
                     processed++;
-                    var lineNumber = processed + 1; // include header
-
-                    var values = SplitCsvLine(line, delimiter);
-                    var rowDict = BuildRowDictionary(headers, values);
-                    var mapped = profile.Map(rowDict);
-
-                    if (mapped == null)
+                    if (!ProcessLine(line, processed + 1, headers, delimiter, profile, format, batch, result, cancellationToken)
+                        && batch.Count >= batchSize)
                     {
-                        result.Skipped++;
-                        result.Errors.Add($"Рядок {lineNumber}: неможливо прочитати дані формату {format}");
-                        continue;
-                    }
-
-                    var validation = _validator.Validate(mapped);
-                    if (!validation.IsValid)
-                    {
-                        result.Skipped++;
-                        result.Errors.Add($"Рядок {lineNumber}: {string.Join(", ", validation.Errors.Select(e => e.ErrorMessage))}");
-                        continue;
-                    }
-
-                    if (!TryParseTransaction(mapped, format, out var transaction, out var parseError))
-                    {
-                        result.Skipped++;
-                        result.Errors.Add($"Рядок {lineNumber}: {parseError}");
-                        continue;
-                    }
-
-                    batch.Add(transaction);
-
-                    if (batch.Count >= batchSize)
-                    {
-                        var saved = await _transactionService.AddTransactionsBatchAsync(batch, cancellationToken);
-                        result.Imported += saved;
-                        batch.Clear();
-                        progress?.Report(processed);
+                        await FlushBatchAsync(batch, result, cancellationToken, progress, processed);
                     }
                 }
 
@@ -174,22 +171,55 @@ namespace doc_bursa.Services
 
         private static Encoding DetectEncodingWithFallback(string filePath)
         {
+            var bomEncoding = DetectBomEncoding(filePath);
+            if (bomEncoding != null)
+            {
+                return bomEncoding;
+            }
+
             foreach (var enc in _candidateEncodings.Where(e => e != null))
             {
-                try
+                if (IsEncodingReadable(filePath, enc!))
                 {
-                    using var reader = new StreamReader(filePath, enc!, detectEncodingFromByteOrderMarks: true);
-                    // attempt to read a single line to validate encoding
-                    reader.ReadLine();
                     return enc!;
-                }
-                catch (DecoderFallbackException)
-                {
-                    // try next
                 }
             }
 
             return new UTF8Encoding(false, true);
+        }
+
+        private static Encoding? DetectBomEncoding(string filePath)
+        {
+            var bom = new byte[4];
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            if (fs.Read(bom, 0, 4) < 2)
+            {
+                return null;
+            }
+
+            // BOM detection
+            if (bom[0] == 0xEF && bom[1] == 0xBB && bom[2] == 0xBF) return new UTF8Encoding(true, true);
+            if (bom[0] == 0xFF && bom[1] == 0xFE && bom[2] == 0x00 && bom[3] == 0x00) return Encoding.UTF32;
+            if (bom[0] == 0xFF && bom[1] == 0xFE) return Encoding.Unicode;
+            if (bom[0] == 0xFE && bom[1] == 0xFF) return Encoding.BigEndianUnicode;
+
+            return null;
+        }
+
+        private static bool IsEncodingReadable(string filePath, Encoding encoding)
+        {
+            try
+            {
+                using var reader = new StreamReader(filePath, encoding, detectEncodingFromByteOrderMarks: true);
+                var buffer = new char[2048];
+                var read = reader.ReadBlock(buffer, 0, buffer.Length);
+                var sample = new string(buffer, 0, read);
+                return !sample.Contains('\uFFFD');
+            }
+            catch (DecoderFallbackException)
+            {
+                return false;
+            }
         }
 
         private static char DetectDelimiter(string headerLine)
@@ -201,14 +231,14 @@ namespace doc_bursa.Services
                 .First().Delimiter;
         }
 
-        private static CsvFormat ResolveFormat(string? bankType, string[] headers)
+        private static CsvFormat ResolveFormat(string? bankType, string[] headers, List<string[]> previewRows)
         {
             if (!string.IsNullOrWhiteSpace(bankType) && Enum.TryParse<CsvFormat>(bankType, true, out var manualFormat))
             {
                 return manualFormat;
             }
 
-            return CsvFormatDetector.Detect(headers);
+            return CsvFormatDetector.Detect(headers, previewRows);
         }
 
         private static string[] SplitCsvLine(string line, char delimiter)
@@ -263,11 +293,54 @@ namespace doc_bursa.Services
             return dict;
         }
 
+        private bool ProcessLine(
+            string line,
+            int lineNumber,
+            string[] headers,
+            char delimiter,
+            CsvFormatProfile profile,
+            CsvFormat format,
+            List<Transaction> batch,
+            CsvImportResult result,
+            CancellationToken cancellationToken)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var values = SplitCsvLine(line, delimiter);
+            var rowDict = BuildRowDictionary(headers, values);
+            var mapped = profile.Map(rowDict);
+
+            if (mapped == null)
+            {
+                result.Skipped++;
+                result.Errors.Add($"Рядок {lineNumber}: неможливо прочитати дані формату {format}");
+                return true;
+            }
+
+            var validation = _validator.Validate(mapped);
+            if (!validation.IsValid)
+            {
+                result.Skipped++;
+                result.Errors.Add($"Рядок {lineNumber}: {string.Join(", ", validation.Errors.Select(e => e.ErrorMessage))}");
+                return true;
+            }
+
+            if (!TryParseTransaction(mapped, format, out var transaction, out var parseError))
+            {
+                result.Skipped++;
+                result.Errors.Add($"Рядок {lineNumber}: {parseError}");
+                return true;
+            }
+
+            batch.Add(transaction);
+            return false;
+        }
+
         private bool TryParseTransaction(MappedCsvRow mapped, CsvFormat format, out Transaction transaction, out string error)
         {
             transaction = new Transaction();
 
-            if (!DateTime.TryParseExact(mapped.Date, _dateFormats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsedDate))
+            if (!DateTime.TryParseExact(mapped.Date, _dateFormats, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var parsedDate)
+                && !DateTime.TryParse(mapped.Date, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces, out parsedDate))
             {
                 error = $"Неправильна дата: {mapped.Date}";
                 return false;
@@ -293,6 +366,27 @@ namespace doc_bursa.Services
 
             error = string.Empty;
             return true;
+        }
+
+        private async Task FlushBatchAsync(List<Transaction> batch, CsvImportResult result, CancellationToken cancellationToken, IProgress<int>? progress, int processed)
+        {
+            var saved = await _transactionService.AddTransactionsBatchAsync(batch, cancellationToken);
+            result.Imported += saved;
+            batch.Clear();
+            progress?.Report(processed);
+        }
+
+        private static async Task<List<string>> ReadPreviewAsync(StreamReader reader, CancellationToken cancellationToken)
+        {
+            const int previewCount = 5;
+            var lines = new List<string>(previewCount);
+            while (!reader.EndOfStream && lines.Count < previewCount)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                lines.Add(await reader.ReadLineAsync(cancellationToken) ?? string.Empty);
+            }
+
+            return lines;
         }
     }
 
@@ -360,32 +454,70 @@ namespace doc_bursa.Services
 
     public static class CsvFormatDetector
     {
-        public static CsvFormat Detect(IEnumerable<string> headers)
+        private static readonly Dictionary<CsvFormat, string[]> HeaderSignatures = new()
+        {
+            { CsvFormat.Monobank, new[] { "дата", "опис", "сума", "валюта" } },
+            { CsvFormat.PrivatBank, new[] { "час", "категорія", "опис" } },
+            { CsvFormat.UkrsibBank, new[] { "balance", "description" } },
+            { CsvFormat.Raiffeisen, new[] { "booking date", "value date" } },
+            { CsvFormat.Revolut, new[] { "completed date", "reference" } },
+            { CsvFormat.OtpBank, new[] { "account number", "otp" } },
+            { CsvFormat.AlfaBank, new[] { "alfa", "дата операции" } },
+            { CsvFormat.Pumb, new[] { "pumb", "merchant" } },
+            { CsvFormat.Wise, new[] { "wise", "payee" } },
+            { CsvFormat.Sber, new[] { "сбербанк", "назначение платежа" } }
+        };
+
+        private static readonly Dictionary<CsvFormat, string[]> ValueHints = new()
+        {
+            { CsvFormat.Monobank, new[] { "monobank", "mono" } },
+            { CsvFormat.PrivatBank, new[] { "privat", "pb.ua" } },
+            { CsvFormat.Raiffeisen, new[] { "raiffeisen", "aval" } },
+            { CsvFormat.Revolut, new[] { "revolut", "vault" } },
+            { CsvFormat.OtpBank, new[] { "otp" } },
+            { CsvFormat.AlfaBank, new[] { "alfa", "a-bank" } },
+            { CsvFormat.Pumb, new[] { "pumb" } },
+            { CsvFormat.Wise, new[] { "wise", "transferwise" } },
+            { CsvFormat.Sber, new[] { "sber", "сбербанк" } }
+        };
+
+        public static CsvFormat Detect(IEnumerable<string> headers, IEnumerable<string[]>? sampleRows = null)
         {
             var headerList = headers.Select(h => h.Trim().ToLowerInvariant()).ToList();
+            var scored = new Dictionary<CsvFormat, int>();
 
-            if (headerList.Contains("дата") && headerList.Contains("опис") && headerList.Contains("сума") && headerList.Contains("валюта"))
-                return CsvFormat.Monobank;
-            if (headerList.Contains("час") && headerList.Contains("категорія"))
-                return CsvFormat.PrivatBank;
-            if (headerList.Contains("balance") && headerList.Contains("description"))
-                return CsvFormat.UkrsibBank;
-            if (headerList.Contains("booking date") || headerList.Contains("value date"))
-                return CsvFormat.Raiffeisen;
-            if (headerList.Contains("completed date") || headerList.Contains("reference"))
-                return CsvFormat.Revolut;
-            if (headerList.Contains("account number") || headerList.Contains("otp"))
-                return CsvFormat.OtpBank;
-            if (headerList.Any(h => h.Contains("alfa")) || headerList.Contains("дата операции"))
-                return CsvFormat.AlfaBank;
-            if (headerList.Contains("pumb") || headerList.Contains("merchant"))
-                return CsvFormat.Pumb;
-            if (headerList.Contains("wise") || headerList.Contains("payee"))
-                return CsvFormat.Wise;
-            if (headerList.Contains("сбербанк") || headerList.Contains("назначение платежа"))
-                return CsvFormat.Sber;
+            foreach (var signature in HeaderSignatures)
+            {
+                var score = signature.Value.Count(headerList.Contains);
+                if (headerList.Any(h => signature.Value.Any(sig => h.Contains(sig))))
+                {
+                    score += 2;
+                }
 
-            return CsvFormat.Universal;
+                scored[signature.Key] = score;
+            }
+
+            if (sampleRows != null)
+            {
+                foreach (var row in sampleRows)
+                {
+                    var lowerValues = row.Select(v => v.ToLowerInvariant());
+                    foreach (var hint in ValueHints)
+                    {
+                        if (lowerValues.Any(v => hint.Value.Any(h => v.Contains(h))))
+                        {
+                            scored[hint.Key] = scored.GetValueOrDefault(hint.Key) + 1;
+                        }
+                    }
+                }
+            }
+
+            var best = scored
+                .OrderByDescending(kv => kv.Value)
+                .ThenBy(kv => kv.Key.ToString(), StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+
+            return best.Value > 0 ? best.Key : CsvFormat.Universal;
         }
     }
 

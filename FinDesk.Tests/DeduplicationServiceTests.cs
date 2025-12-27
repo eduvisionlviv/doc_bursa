@@ -165,6 +165,126 @@ namespace doc_bursa.Tests
         }
 
         [Fact]
+        public void FuzzyDuplicates_AreDetectedViaSimilarity()
+        {
+            var temp = CreateIsolatedAppData();
+            try
+            {
+                var (db, txService) = CreateServices();
+                var date = DateTime.UtcNow;
+
+                var first = new Transaction
+                {
+                    TransactionId = Guid.NewGuid().ToString(),
+                    Date = date,
+                    Amount = 75m,
+                    Description = "Coffee Shop Kyiv"
+                };
+
+                var second = new Transaction
+                {
+                    TransactionId = Guid.NewGuid().ToString(),
+                    Date = date.AddMinutes(5),
+                    Amount = 75.20m,
+                    Description = "Coffee shop kiev"
+                };
+
+                Assert.True(txService.AddTransaction(first));
+                Assert.True(txService.AddTransaction(second));
+
+                var saved = db.GetTransactionByTransactionId(second.TransactionId);
+                Assert.NotNull(saved);
+                Assert.True(saved!.IsDuplicate);
+                Assert.Equal(first.TransactionId, saved.OriginalTransactionId);
+            }
+            finally
+            {
+                Cleanup(temp);
+            }
+        }
+
+        [Fact]
+        public void AmountTolerance_PreventsFalseDuplicates()
+        {
+            var temp = CreateIsolatedAppData();
+            try
+            {
+                var (db, txService) = CreateServices();
+                var date = DateTime.UtcNow;
+
+                var first = new Transaction
+                {
+                    TransactionId = Guid.NewGuid().ToString(),
+                    Date = date,
+                    Amount = 50m,
+                    Description = "Lunch downtown"
+                };
+
+                var second = new Transaction
+                {
+                    TransactionId = Guid.NewGuid().ToString(),
+                    Date = date.AddHours(1),
+                    Amount = 120m,
+                    Description = "Lunch downtown"
+                };
+
+                Assert.True(txService.AddTransaction(first));
+                Assert.True(txService.AddTransaction(second));
+
+                var saved = db.GetTransactionByTransactionId(second.TransactionId);
+                Assert.NotNull(saved);
+                Assert.False(saved!.IsDuplicate);
+            }
+            finally
+            {
+                Cleanup(temp);
+            }
+        }
+
+        [Fact]
+        public void BulkDeduplication_UsesFuzzyGrouping()
+        {
+            var temp = CreateIsolatedAppData();
+            try
+            {
+                var (db, txService, dedup) = CreateServices(withDeduplicationInstance: true);
+                var date = DateTime.UtcNow.Date;
+
+                var items = new[]
+                {
+                    ("Grocery store central", -320.55m),
+                    ("Grocery store - Central", -320.00m),
+                    ("Grocery central store", -321.10m)
+                };
+
+                foreach (var item in items)
+                {
+                    var tx = new Transaction
+                    {
+                        TransactionId = Guid.NewGuid().ToString(),
+                        Date = date,
+                        Amount = item.Item2,
+                        Description = item.Item1,
+                        IsDuplicate = false
+                    };
+                    dedup.EnsureHash(tx);
+                    db.SaveTransaction(tx);
+                }
+
+                var marked = dedup.BulkDetectAndMark(batchSize: 10);
+                var all = db.GetTransactions();
+
+                Assert.Equal(2, marked);
+                Assert.Equal(2, all.Count(t => t.IsDuplicate));
+                Assert.Single(all.Where(t => !t.IsDuplicate));
+            }
+            finally
+            {
+                Cleanup(temp);
+            }
+        }
+
+        [Fact]
         public void HandlesThousandTransactions_Performantly()
         {
             var temp = CreateIsolatedAppData();
@@ -236,4 +356,3 @@ namespace doc_bursa.Tests
         }
     }
 }
-
