@@ -2,25 +2,33 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
+using doc_bursa.Models;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using doc_bursa.Models;
+using Polly;
 
 namespace doc_bursa.Services
 {
     public class PrivatBankService
     {
         private const string BaseUrl = "https://acp.privatbank.ua/api";
+        private static readonly LruCache<string, List<Transaction>> _cache = new(capacity: 64, defaultTtl: TimeSpan.FromMinutes(10));
+        private static readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy = Policy<HttpResponseMessage>
+            .Handle<HttpRequestException>()
+            .OrResult(response => !response.IsSuccessStatusCode)
+            .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
 
         public async Task<List<Transaction>> GetTransactionsAsync(string token, string clientId, DateTime from, DateTime to)
         {
-            var transactions = new List<Transaction>();
-            string accParam = string.IsNullOrWhiteSpace(clientId) ? "" : $"&acc={clientId}";
-            string startDate = from.ToString("dd-MM-yyyy");
-            string endDate = to.ToString("dd-MM-yyyy");
-
-            using (var client = new HttpClient())
+            string cacheKey = $"{token}:{clientId}:{from:O}:{to:O}";
+            return await _cache.GetOrAddAsync(cacheKey, async () =>
             {
+                var transactions = new List<Transaction>();
+                string accParam = string.IsNullOrWhiteSpace(clientId) ? "" : $"&acc={clientId}";
+                string startDate = from.ToString("dd-MM-yyyy");
+                string endDate = to.ToString("dd-MM-yyyy");
+
+                using var client = new HttpClient();
                 client.DefaultRequestHeaders.Add("token", token);
                 client.DefaultRequestHeaders.Add("User-Agent", "FinDesk Client");
                 client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
@@ -33,7 +41,7 @@ namespace doc_bursa.Services
                     var followParam = followId != null ? $"&followId={followId}" : "";
                     string url = $"{BaseUrl}/statements/transactions?startDate={startDate}&endDate={endDate}&limit=100{accParam}{followParam}";
 
-                    var response = await client.GetAsync(url);
+                    var response = await _retryPolicy.ExecuteAsync(() => client.GetAsync(url));
                     if (!response.IsSuccessStatusCode)
                     {
                         var err = await response.Content.ReadAsStringAsync();
@@ -61,8 +69,9 @@ namespace doc_bursa.Services
                     existNextPage = (bool?)data["exist_next_page"] ?? false;
                     followId = data["next_page_id"]?.ToString();
                 }
-            }
-            return transactions;
+
+                return transactions;
+            });
         }
 
         private Transaction MapTransaction(JToken item)
@@ -86,7 +95,6 @@ namespace doc_bursa.Services
                 TransactionId = item["ID"]?.ToString() ?? Guid.NewGuid().ToString(),
                 Date = date,
                 Amount = amount,
-                // 👇 ВИПРАВЛЕНО: Додано перевірку на null (?? string.Empty)
                 Description = item["OSND"]?.ToString() ?? string.Empty,
                 Counterparty = item["AUT_CNTR_NAM"]?.ToString() ?? string.Empty,
                 Account = item["AUT_MY_ACC"]?.ToString() ?? string.Empty,

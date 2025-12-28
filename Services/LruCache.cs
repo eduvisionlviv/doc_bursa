@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace doc_bursa.Services
 {
@@ -10,26 +12,53 @@ namespace doc_bursa.Services
     public class LruCache<TKey, TValue> where TKey : notnull
     {
         private readonly int _capacity;
-        private readonly Dictionary<TKey, LinkedListNode<(TKey key, TValue value)>> _map;
-        private readonly LinkedList<(TKey key, TValue value)> _list;
+        private readonly TimeSpan? _defaultTtl;
+        private readonly Dictionary<TKey, LinkedListNode<CacheItem>> _map;
+        private readonly LinkedList<CacheItem> _list;
+        private readonly object _syncRoot = new();
 
-        public LruCache(int capacity = 512)
+        private record CacheItem(TKey Key, TValue Value, DateTimeOffset CreatedAt, TimeSpan? Ttl)
         {
-            _capacity = capacity;
-            _map = new Dictionary<TKey, LinkedListNode<(TKey key, TValue value)>>();
-            _list = new LinkedList<(TKey key, TValue value)>();
+            public bool IsExpired => Ttl.HasValue && DateTimeOffset.UtcNow - CreatedAt > Ttl.Value;
         }
 
-        public int Count => _map.Count;
+        public LruCache(int capacity = 512, TimeSpan? defaultTtl = null)
+        {
+            _capacity = capacity;
+            _defaultTtl = defaultTtl;
+            _map = new Dictionary<TKey, LinkedListNode<CacheItem>>();
+            _list = new LinkedList<CacheItem>();
+        }
+
+        public int Count
+        {
+            get
+            {
+                lock (_syncRoot)
+                {
+                    return _map.Count;
+                }
+            }
+        }
 
         public bool TryGet(TKey key, out TValue value)
         {
-            if (_map.TryGetValue(key, out var node))
+            lock (_syncRoot)
             {
-                _list.Remove(node);
-                _list.AddFirst(node);
-                value = node.Value.value;
-                return true;
+                if (_map.TryGetValue(key, out var node))
+                {
+                    if (node.Value.IsExpired)
+                    {
+                        RemoveNode(node);
+                        value = default!;
+                        return false;
+                    }
+
+                    _list.Remove(node);
+                    _list.AddFirst(node);
+                    value = node.Value.Value;
+                    return true;
+                }
             }
 
             value = default!;
@@ -38,30 +67,62 @@ namespace doc_bursa.Services
 
         public void AddOrUpdate(TKey key, TValue value)
         {
-            if (_map.TryGetValue(key, out var existing))
+            AddOrUpdate(key, value, null);
+        }
+
+        public void AddOrUpdate(TKey key, TValue value, TimeSpan? ttl)
+        {
+            lock (_syncRoot)
             {
-                _list.Remove(existing);
+                if (_map.TryGetValue(key, out var existing))
+                {
+                    _list.Remove(existing);
+                }
+                else if (_map.Count >= _capacity)
+                {
+                    RemoveLeastRecentlyUsed();
+                }
+
+                var node = new LinkedListNode<CacheItem>(new CacheItem(key, value, DateTimeOffset.UtcNow, ttl ?? _defaultTtl));
+                _list.AddFirst(node);
+                _map[key] = node;
             }
-            else if (_map.Count >= _capacity)
+        }
+
+        public async Task<TValue> GetOrAddAsync(TKey key, Func<Task<TValue>> factory, TimeSpan? ttl = null)
+        {
+            if (TryGet(key, out var cachedValue))
             {
-                RemoveLeastRecentlyUsed();
+                return cachedValue;
             }
 
-            var node = new LinkedListNode<(TKey key, TValue value)>((key, value));
-            _list.AddFirst(node);
-            _map[key] = node;
+            var created = await factory();
+            AddOrUpdate(key, created, ttl);
+            return created;
         }
 
         private void RemoveLeastRecentlyUsed()
         {
-            var lru = _list.Last;
-            if (lru != null)
+            if (_list.Last is { } lru)
             {
-                _map.Remove(lru.Value.key);
-                _list.RemoveLast();
+                RemoveNode(lru);
+            }
+        }
+
+        private void RemoveNode(LinkedListNode<CacheItem> node)
+        {
+            _map.Remove(node.Value.Key);
+            _list.Remove(node);
+        }
+
+        public void Clear()
+        {
+            lock (_syncRoot)
+            {
+                _map.Clear();
+                _list.Clear();
             }
         }
     }
 }
-
 
