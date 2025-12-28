@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using doc_bursa.Models;
-using doc_bursa.Infrastructure.Data;
 using Serilog;
 
 namespace doc_bursa.Services
@@ -28,178 +27,95 @@ namespace doc_bursa.Services
         /// Створити планову транзакцію.
         /// </summary>
         public async Task<PlannedTransaction> CreatePlannedTransactionAsync(
-            PlannedTransaction planned,
-            CancellationToken ct = default)
+            PlannedTransaction plannedTransaction, CancellationToken ct = default)
         {
-            await using var context = _databaseService.CreateDbContext();
-            context.PlannedTransactions.Add(planned);
-            await context.SaveChangesAsync(ct);
-            _logger.Information("Created planned transaction: {Name} on {Date}", planned.Name, planned.PlannedDate);
-            return planned;
+            using var db = _databaseService.CreateDbContext();
+            db.PlannedTransactions.Add(plannedTransaction);
+            await db.SaveChangesAsync(ct);
+            _logger.Information("Created planned transaction {Id}", plannedTransaction.Id);
+            return plannedTransaction;
         }
 
         /// <summary>
-        /// Отримати планові транзакції за період.
+        /// Отримати всі планові транзакції для рахунку.
         /// </summary>
-        public async Task<List<PlannedTransaction>> GetPlannedTransactionsAsync(
-            DateTime from,
-            DateTime to,
-            int? accountId = null,
-            CancellationToken ct = default)
+        public List<PlannedTransaction> GetPlannedTransactions(string accountNumber)
         {
-            await using var context = _databaseService.CreateDbContext();
-            var query = context.PlannedTransactions
-                .Where(p => p.PlannedDate >= from && p.PlannedDate <= to);
-
-            if (accountId.HasValue)
-            {
-                query = query.Where(p => p.AccountId == accountId.Value);
-            }
-
-            return query.OrderBy(p => p.PlannedDate).ToList();
-        }
-
-        /// <summary>
-        /// Генерація планових транзакцій з шаблонів регулярних платежів.
-        /// </summary>
-        public async Task GeneratePlannedTransactionsFromTemplatesAsync(
-            DateTime from,
-            DateTime to,
-            CancellationToken ct = default)
-        {
-            await using var context = _databaseService.CreateDbContext();
-            var templates = context.RecurringTransactions
-                .Where(r => r.IsActive && r.NextDueDate >= from && r.NextDueDate <= to)
+            using var db = _databaseService.CreateDbContext();
+            return db.PlannedTransactions
+                .Where(pt => pt.AccountNumber == accountNumber && !pt.IsExecuted)
+                .OrderBy(pt => pt.PlannedDate)
                 .ToList();
-
-            foreach (var template in templates)
-            {
-                // Перевіряємо, чи вже існує планова транзакція з цього шаблону
-                var exists = context.PlannedTransactions
-                    .Any(p =>
-                        p.RecurringTransactionId == template.Id &&
-                        p.PlannedDate.Date == template.NextDueDate.Date);
-
-                if (!exists)
-                {
-                    var planned = new PlannedTransaction
-                    {
-                        Name = template.Description,
-                        Description = template.Notes,
-                        PlannedDate = template.NextDueDate,
-                        Amount = template.Amount,
-                        Category = template.Category,
-                        AccountId = template.AccountId,
-                        RecurringTransactionId = template.Id,
-                        IsRecurring = true,
-                        Status = PlannedTransactionStatus.Pending
-                    };
-
-                    context.PlannedTransactions.Add(planned);
-                    _logger.Information(
-                        "Generated planned transaction from template: {Description} on {Date}",
-                        template.Description, template.NextDueDate);
-                }
-            }
-
-            await context.SaveChangesAsync(ct);
         }
 
         /// <summary>
-        /// Позначити планову транзакцію як виконану (поглинуту реальною).
+        /// Позначити планову транзакцію як виконану.
         /// </summary>
-        public async Task MarkPlannedAsCompletedAsync(
-            int plannedId,
-            int actualTransactionId,
-            CancellationToken ct = default)
+        public async Task MarkAsExecutedAsync(int plannedTransactionId, int actualTransactionId, CancellationToken ct = default)
         {
-            await using var context = _databaseService.CreateDbContext();
-            var planned = context.PlannedTransactions.FirstOrDefault(p => p.Id == plannedId);
-
+            using var db = _databaseService.CreateDbContext();
+            var planned = db.PlannedTransactions.FirstOrDefault(pt => pt.Id == plannedTransactionId);
             if (planned != null)
             {
-                planned.Status = PlannedTransactionStatus.Completed;
+                planned.IsExecuted = true;
                 planned.ActualTransactionId = actualTransactionId;
-                await context.SaveChangesAsync(ct);
-                _logger.Information(
-                    "Marked planned transaction {PlannedId} as completed by actual {ActualId}",
-                    plannedId, actualTransactionId);
+                await db.SaveChangesAsync(ct);
+                _logger.Information("Marked planned transaction {Id} as executed", plannedTransactionId);
             }
         }
 
         /// <summary>
-        /// Розрахунок Вільних коштів (Free Cash).
-        /// Формула: Поточний Баланс - Сума Планових Витрат (до кінця періоду).
+        /// Розрахувати "Вільні кошти" (Free Cash) для рахунку.
+        /// Free Cash = Поточний Баланс - Сума Планових Витрат (до кінця періоду).
         /// </summary>
-        public async Task<decimal> CalculateFreeCashAsync(
-            int accountId,
-            DateTime periodEnd,
-            CancellationToken ct = default)
+        public decimal CalculateFreeCash(string accountNumber, DateTime endDate)
         {
-            await using var context = _databaseService.CreateDbContext();
+            using var db = _databaseService.CreateDbContext();
 
-            // Поточний баланс рахунку
-            var account = context.Accounts.FirstOrDefault(a => a.Id == accountId);
-            if (account == null)
-            {
-                return 0m;
-            }
+            // Поточний баланс
+            var account = db.Accounts.FirstOrDefault(a => a.AccountNumber == accountNumber);
+            if (account == null) return 0m;
 
             var currentBalance = account.Balance;
 
-            // Сума планових витрат до periodEnd
-            var plannedExpenses = context.PlannedTransactions
-                .Where(p =>
-                    p.AccountId == accountId &&
-                    p.Status == PlannedTransactionStatus.Pending &&
-                    p.PlannedDate <= periodEnd &&
-                    p.Amount < 0) // Тільки витрати
-                .Sum(p => p.Amount);
+            // Сума планових витрат до endDate
+            var plannedExpenses = db.PlannedTransactions
+                .Where(pt => pt.AccountNumber == accountNumber
+                             && !pt.IsExecuted
+                             && pt.PlannedDate <= endDate
+                             && pt.Amount < 0)
+                .Sum(pt => pt.Amount);
 
-            var freeCash = currentBalance + plannedExpenses; // plannedExpenses вже негативне
-
-            _logger.Debug(
-                "Free cash for account {AccountId}: Balance={Balance}, Planned={Planned}, Free={Free}",
-                accountId, currentBalance, plannedExpenses, freeCash);
-
-            return freeCash;
+            return currentBalance + plannedExpenses; // plannedExpenses вже негативна
         }
 
         /// <summary>
-        /// Автоматичне поглинання планових транзакцій реальними.
-        /// Викликається після імпорту нових транзакцій.
+        /// Отримати всі планові транзакції в діапазоні дат.
         /// </summary>
-        public async Task AutoMatchPlannedTransactionsAsync(
-            Transaction actual,
-            CancellationToken ct = default)
+        public List<PlannedTransaction> GetPlannedTransactionsByDateRange(
+            string accountNumber, DateTime startDate, DateTime endDate)
         {
-            await using var context = _databaseService.CreateDbContext();
-
-            var searchFrom = actual.Date.AddDays(-3);
-            var searchTo = actual.Date.AddDays(3);
-
-            var candidates = context.PlannedTransactions
-                .Where(p =>
-                    p.AccountId == actual.AccountId &&
-                    p.Status == PlannedTransactionStatus.Pending &&
-                    p.PlannedDate >= searchFrom &&
-                    p.PlannedDate <= searchTo)
+            using var db = _databaseService.CreateDbContext();
+            return db.PlannedTransactions
+                .Where(pt => pt.AccountNumber == accountNumber
+                             && pt.PlannedDate >= startDate
+                             && pt.PlannedDate <= endDate)
+                .OrderBy(pt => pt.PlannedDate)
                 .ToList();
+        }
 
-            foreach (var candidate in candidates)
+        /// <summary>
+        /// Видалити планову транзакцію.
+        /// </summary>
+        public async Task DeletePlannedTransactionAsync(int plannedTransactionId, CancellationToken ct = default)
+        {
+            using var db = _databaseService.CreateDbContext();
+            var planned = db.PlannedTransactions.FirstOrDefault(pt => pt.Id == plannedTransactionId);
+            if (planned != null)
             {
-                // Проста евристика: перевіряємо суму та категорію
-                var amountMatch = Math.Abs(candidate.Amount - actual.Amount) < 0.01m;
-                var categoryMatch = candidate.Category.Equals(actual.Category, StringComparison.OrdinalIgnoreCase);
-
-                if (amountMatch && categoryMatch)
-                {
-                    await MarkPlannedAsCompletedAsync(candidate.Id, actual.Id, ct);
-                    _logger.Information(
-                        "Auto-matched planned transaction {PlannedId} with actual {ActualId}",
-                        candidate.Id, actual.Id);
-                    break; // Одна реальна може поглинути тільки одну планову
-                }
+                db.PlannedTransactions.Remove(planned);
+                await db.SaveChangesAsync(ct);
+                _logger.Information("Deleted planned transaction {Id}", plannedTransactionId);
             }
         }
     }
