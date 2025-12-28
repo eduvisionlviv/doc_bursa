@@ -10,6 +10,7 @@ using CommunityToolkit.Mvvm.Input;
 using doc_bursa.Models;
 using doc_bursa.Services;
 using Microsoft.Win32;
+using Serilog;
 
 namespace doc_bursa.ViewModels
 {
@@ -20,6 +21,8 @@ namespace doc_bursa.ViewModels
         private readonly CsvImportService _csvImport;
         private readonly ExcelImportService _excelImport;
         private readonly ImportLogService _importLog;
+        private readonly SyncQueueService _syncQueue;
+        private readonly ILogger _logger;
 
         [ObservableProperty]
         private ObservableCollection<DataSource> sources = new();
@@ -48,11 +51,21 @@ namespace doc_bursa.ViewModels
         [ObservableProperty]
         private bool isBusy;
 
+        [ObservableProperty]
+        private bool isOffline;
+
+        [ObservableProperty]
+        private string networkStatus = "Статус мережі: невідомо";
+
+        [ObservableProperty]
+        private string syncStatusMessage = "Готово";
+
         public string[] AvailableTypes { get; } = { "PrivatBank", "Monobank", "Ukrsibbank", "CSV Import" };
 
         public SourcesViewModel()
         {
             _db = new DatabaseService();
+            _logger = Log.ForContext<SourcesViewModel>();
             
             var catService = new CategorizationService(_db);
             var dedupService = new DeduplicationService(_db);
@@ -60,6 +73,14 @@ namespace doc_bursa.ViewModels
             _csvImport = new CsvImportService(_db, catService, _transactionService);
             _excelImport = new ExcelImportService(_db, catService, _transactionService);
             _importLog = new ImportLogService();
+            _syncQueue = new SyncQueueService();
+            _syncQueue.StatusChanged += message => SyncStatusMessage = message;
+            _syncQueue.NetworkStatusChanged += (online, message) =>
+            {
+                IsOffline = !online;
+                NetworkStatus = $"Статус мережі: {message}";
+                _logger.Information("Network status changed: {Message}", message);
+            };
 
             _ = LoadSources();
         }
@@ -215,33 +236,44 @@ namespace doc_bursa.ViewModels
             try
             {
                 IsBusy = true;
-                List<Transaction> transactions = new();
-                var toDate = DateTime.Now;
-                var fromDate = toDate.AddMonths(-1);
+                SyncStatusMessage = "Додаємо у чергу синхронізації...";
+                var importedCount = 0;
 
-                if (source.Type == "PrivatBank")
+                await _syncQueue.EnqueueAsync($"Синхронізація {source.Name}", async _ =>
                 {
-                    var service = new PrivatBankService();
-                    transactions = await service.GetTransactionsAsync(source.ApiToken, source.ClientId, fromDate, toDate);
-                }
-                else if (source.Type == "Monobank")
-                {
-                    var service = new MonobankService();
-                    transactions = await service.GetTransactionsAsync(source.ApiToken, source.ClientId, fromDate, toDate);
-                }
-                else if (source.Type == "Ukrsibbank")
-                {
-                     MessageBox.Show("Для УкрСиббанку використовуйте імпорт CSV.", "Інфо");
-                     return;
-                }
+                    List<Transaction> transactions = new();
+                    var toDate = DateTime.Now;
+                    var fromDate = toDate.AddMonths(-1);
 
-                if (transactions.Any())
+                    if (source.Type == "PrivatBank")
+                    {
+                        var service = new PrivatBankService();
+                        transactions = await service.GetTransactionsAsync(source.ApiToken, source.ClientId, fromDate, toDate);
+                    }
+                    else if (source.Type == "Monobank")
+                    {
+                        var service = new MonobankService();
+                        transactions = await service.GetTransactionsAsync(source.ApiToken, source.ClientId, fromDate, toDate);
+                    }
+                    else if (source.Type == "Ukrsibbank")
+                    {
+                        throw new InvalidOperationException("Для УкрСиббанку використовуйте імпорт CSV.");
+                    }
+
+                    if (transactions.Any())
+                    {
+                        await _transactionService.ImportTransactionsAsync(transactions, CancellationToken.None);
+                        source.LastSync = DateTime.Now;
+                        await _db.UpdateDataSourceAsync(source);
+                        importedCount = transactions.Count;
+                    }
+                });
+
+                await LoadSources();
+
+                if (importedCount > 0)
                 {
-                    await _transactionService.ImportTransactionsAsync(transactions, CancellationToken.None);
-                    source.LastSync = DateTime.Now;
-                    await _db.UpdateDataSourceAsync(source);
-                    await LoadSources();
-                    MessageBox.Show($"Успішно завантажено {transactions.Count} транзакцій!", "Успіх");
+                    MessageBox.Show($"Успішно завантажено {importedCount} транзакцій!", "Успіх");
                 }
                 else
                 {
@@ -250,6 +282,7 @@ namespace doc_bursa.ViewModels
             }
             catch (Exception ex)
             {
+                _logger.Error(ex, "Sync failed for {Source}", source?.Name);
                 MessageBox.Show($"Помилка синхронізації: {ex.Message}", "Помилка");
             }
             finally

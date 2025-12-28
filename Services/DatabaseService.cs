@@ -17,6 +17,7 @@ namespace doc_bursa.Services
     {
         private readonly string _connectionString;
         private readonly ILogger _logger;
+        private readonly EncryptionService _encryption;
 
         public DatabaseService(string? databasePath = null)
         {
@@ -25,6 +26,7 @@ namespace doc_bursa.Services
                 : databasePath;
             _connectionString = $"Data Source={dbPath}";
             _logger = Log.ForContext<DatabaseService>();
+            _encryption = new EncryptionService();
             InitializeDatabase();
         }
 
@@ -716,9 +718,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.ExecuteNonQuery();
@@ -740,9 +742,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
 
@@ -766,9 +768,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.Parameters.AddWithValue("$id", source.Id);
@@ -805,9 +807,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.Parameters.AddWithValue("$id", source.Id);
@@ -870,12 +872,32 @@ namespace doc_bursa.Services
                 Id = reader.GetInt32(0),
                 Name = reader.GetString(1),
                 Type = reader.GetString(2),
-                ApiToken = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                ApiToken = DecryptSensitive(reader.IsDBNull(3) ? string.Empty : reader.GetString(3)),
                 ClientId = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                ClientSecret = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+                ClientSecret = DecryptSensitive(reader.IsDBNull(5) ? string.Empty : reader.GetString(5)),
                 IsEnabled = reader.GetInt32(6) == 1,
                 LastSync = string.IsNullOrEmpty(reader.GetString(7)) ? null : DateTime.Parse(reader.GetString(7))
             };
+        }
+
+        private string EncryptSensitive(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return _encryption.IsEncrypted(value) ? value : _encryption.Encrypt(value);
+        }
+
+        private string DecryptSensitive(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return _encryption.Decrypt(value);
         }
 
         // Category Rules
