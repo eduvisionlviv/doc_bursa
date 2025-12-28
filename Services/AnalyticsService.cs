@@ -216,6 +216,34 @@ namespace doc_bursa.Services
             return trend;
         }
 
+        /// <summary>
+        /// Сума запланованих витрат у вказаному періоді з урахуванням вже проведених транзакцій.
+        /// </summary>
+        public decimal GetPlannedExpenseTotal(DateTime? periodStart, DateTime? periodEnd)
+        {
+            var start = periodStart?.Date ?? DateTime.UtcNow.Date;
+            var end = periodEnd?.Date ?? start.AddMonths(1);
+            var actualTransactions = _databaseService.GetTransactions(start, end);
+            var recurring = _databaseService.GetRecurringTransactions(onlyActive: true);
+            var plannedTransactions = RecurringTransactionPlanner.Generate(recurring, actualTransactions, start, end);
+
+            return plannedTransactions
+                .Where(p => p.Amount < 0 && !p.IsAbsorbed)
+                .Sum(p => Math.Abs(p.Amount));
+        }
+
+        /// <summary>
+        /// Розрахувати Free Cash: поточний баланс мінус заплановані витрати.
+        /// </summary>
+        public decimal CalculateFreeCash(DateTime? periodStart, DateTime? periodEnd)
+        {
+            var actualTransactions = _databaseService.GetTransactions(periodStart, periodEnd);
+            var balance = actualTransactions.Sum(t => t.Amount);
+            var plannedExpenses = GetPlannedExpenseTotal(periodStart, periodEnd);
+
+            return balance - plannedExpenses;
+        }
+
         public ForecastResult ForecastBalance(string accountNumber, TrendGranularity granularity, int periods = 3, DateTime? from = null, DateTime? to = null)
         {
             var trend = GetTrend(accountNumber, granularity, from, to);

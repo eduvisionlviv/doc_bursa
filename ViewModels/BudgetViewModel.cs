@@ -29,6 +29,9 @@ namespace doc_bursa.ViewModels
         private ObservableCollection<BudgetPeriodSummary> yearlySummaries = new();
 
         [ObservableProperty]
+        private ObservableCollection<PlannedTransaction> plannedPayments = new();
+
+        [ObservableProperty]
         private BudgetAnalysisResult? selectedBudget;
 
         [ObservableProperty]
@@ -76,6 +79,7 @@ namespace doc_bursa.ViewModels
             var analyses = _budgetService.EvaluateAllBudgets();
             Budgets = new ObservableCollection<BudgetAnalysisResult>(analyses.Values.OrderBy(b => b.Budget.Name));
             Alerts = new ObservableCollection<BudgetAlert>(_budgetService.GetAlerts());
+            RefreshPlannedPayments();
 
             if (SelectedBudget != null)
             {
@@ -160,6 +164,16 @@ namespace doc_bursa.ViewModels
             SelectedFrequency = BudgetFrequency.Monthly;
             NewBudgetStartDate = DateTime.UtcNow.Date;
         }
+
+        private void RefreshPlannedPayments()
+        {
+            var periodStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            var periodEnd = periodStart.AddMonths(2).AddDays(-1);
+            var recurring = _databaseService.GetRecurringTransactions(onlyActive: true);
+            var actualTransactions = _databaseService.GetTransactions(periodStart, periodEnd);
+            var planned = RecurringTransactionPlanner.Generate(recurring, actualTransactions, periodStart, periodEnd);
+
+            PlannedPayments = new ObservableCollection<PlannedTransaction>(planned);
+        }
     }
 }
-

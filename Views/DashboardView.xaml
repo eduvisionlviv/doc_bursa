@@ -75,12 +75,16 @@
 
                 <Border Grid.Column="3" Style="{StaticResource CardStyle}" Margin="10,0,0,0">
                     <StackPanel>
-                        <TextBlock Text="Економія" FontSize="14" Foreground="#9CA3AF"/>
-                        <TextBlock Text="{Binding Balance, StringFormat='{}{0:N2} ₴'}" 
+                        <TextBlock Text="Free Cash" FontSize="14" Foreground="#9CA3AF"/>
+                        <TextBlock Text="{Binding FreeCash, StringFormat='{}{0:N2} ₴'}" 
                                   FontSize="24" 
                                   FontWeight="Bold" 
                                   Foreground="#9B59B6" 
                                   Margin="0,5,0,0"/>
+                        <TextBlock Text="{Binding PlannedExpenses, StringFormat='Планові витрати: {0:N2} ₴'}"
+                                   FontSize="12"
+                                   Foreground="#E5E7EB"
+                                   Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
             </Grid>

@@ -16,6 +16,7 @@ namespace doc_bursa.ViewModels
     public partial class DashboardViewModel : ObservableObject
     {
         private readonly DatabaseService _db;
+        private readonly AnalyticsService _analyticsService;
 
         [ObservableProperty]
         private decimal totalIncome;
@@ -34,6 +35,12 @@ namespace doc_bursa.ViewModels
 
         [ObservableProperty]
         private string selectedPeriod = "Поточний місяць";
+
+        [ObservableProperty]
+        private decimal plannedExpenses;
+
+        [ObservableProperty]
+        private decimal freeCash;
 
         // === ГРАФІК 1: ТРЕНД (ЛІНІЯ) ===
         private ISeries[] miniTrendSeries = Array.Empty<ISeries>();
@@ -69,6 +76,7 @@ namespace doc_bursa.ViewModels
         public DashboardViewModel()
         {
             _db = new DatabaseService();
+            _analyticsService = new AnalyticsService(_db);
             LoadData();
         }
 
@@ -81,6 +89,8 @@ namespace doc_bursa.ViewModels
             TotalIncome = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
             TotalExpenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
             Balance = TotalIncome - TotalExpenses;
+            PlannedExpenses = _analyticsService.GetPlannedExpenseTotal(from, to);
+            FreeCash = Balance - PlannedExpenses;
 
             Categories = transactions
                 .Where(t => t.Amount < 0)
