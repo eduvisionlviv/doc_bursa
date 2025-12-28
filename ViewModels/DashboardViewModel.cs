@@ -131,6 +131,7 @@ namespace doc_bursa.ViewModels
             var (from, to) = GetDateRange();
             var accountFilter = SelectedMasterGroup?.AccountNumbers ?? Array.Empty<string>();
             var transactions = _db.GetTransactions(from, to, accounts: accountFilter);
+                        var periodTransactions = transactions;
 
             if (from.HasValue)
             {
