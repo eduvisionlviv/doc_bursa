@@ -141,6 +141,24 @@ namespace doc_bursa.Services
                     IsPlanned INTEGER DEFAULT 0,
                     LinkedTransactionId TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS TransferRules (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    CounterpartyPattern TEXT,
+                    AccountNumber TEXT,
+                    TargetSource TEXT,
+                    IsActive INTEGER DEFAULT 1
+                );
+
+                CREATE TABLE IF NOT EXISTS TransferMatches (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    OutgoingTransactionId TEXT NOT NULL,
+                    IncomingTransactionId TEXT,
+                    CommissionDelta REAL,
+                    Status TEXT,
+                    CreatedAt TEXT NOT NULL,
+                    UpdatedAt TEXT NOT NULL
+                );
             ";
             command.ExecuteNonQuery();
 
@@ -611,6 +629,155 @@ namespace doc_bursa.Services
             }
 
             return accounts;
+        }
+
+        // Transfer rules & matches
+        public void SaveTransferRule(TransferRule rule)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            if (rule.Id == 0)
+            {
+                command.CommandText = @"INSERT INTO TransferRules (CounterpartyPattern, AccountNumber, TargetSource, IsActive)
+                                        VALUES ($pattern, $account, $source, $active)";
+            }
+            else
+            {
+                command.CommandText = @"UPDATE TransferRules
+                                        SET CounterpartyPattern = $pattern, AccountNumber = $account,
+                                            TargetSource = $source, IsActive = $active
+                                        WHERE Id = $id";
+                command.Parameters.AddWithValue("$id", rule.Id);
+            }
+
+            command.Parameters.AddWithValue("$pattern", rule.CounterpartyPattern ?? string.Empty);
+            command.Parameters.AddWithValue("$account", rule.AccountNumber ?? string.Empty);
+            command.Parameters.AddWithValue("$source", rule.TargetSource ?? string.Empty);
+            command.Parameters.AddWithValue("$active", rule.IsActive ? 1 : 0);
+            command.ExecuteNonQuery();
+        }
+
+        public List<TransferRule> GetTransferRules(bool onlyActive = false)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT Id, CounterpartyPattern, AccountNumber, TargetSource, IsActive FROM TransferRules"
+                                  + (onlyActive ? " WHERE IsActive = 1" : string.Empty);
+
+            var result = new List<TransferRule>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new TransferRule
+                {
+                    Id = reader.GetInt32(0),
+                    CounterpartyPattern = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                    AccountNumber = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                    TargetSource = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    IsActive = reader.IsDBNull(4) ? true : reader.GetInt32(4) == 1
+                });
+            }
+
+            return result;
+        }
+
+        public void DeleteTransferRule(int id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM TransferRules WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
+        }
+
+        public void SaveTransferMatch(TransferMatch match)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            if (match.Id == 0)
+            {
+                command.CommandText = @"INSERT INTO TransferMatches
+                    (OutgoingTransactionId, IncomingTransactionId, CommissionDelta, Status, CreatedAt, UpdatedAt)
+                    VALUES ($outId, $inId, $commission, $status, $created, $updated)";
+            }
+            else
+            {
+                command.CommandText = @"UPDATE TransferMatches
+                    SET OutgoingTransactionId = $outId, IncomingTransactionId = $inId,
+                        CommissionDelta = $commission, Status = $status, UpdatedAt = $updated
+                    WHERE Id = $id";
+                command.Parameters.AddWithValue("$id", match.Id);
+            }
+
+            command.Parameters.AddWithValue("$outId", match.OutgoingTransactionId);
+            command.Parameters.AddWithValue("$inId", match.IncomingTransactionId ?? string.Empty);
+            command.Parameters.AddWithValue("$commission", match.CommissionDelta);
+            command.Parameters.AddWithValue("$status", match.Status ?? string.Empty);
+            command.Parameters.AddWithValue("$created", match.CreatedAt.ToString("o"));
+            command.Parameters.AddWithValue("$updated", match.UpdatedAt.ToString("o"));
+            command.ExecuteNonQuery();
+        }
+
+        public List<TransferMatch> GetTransferMatches()
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT Id, OutgoingTransactionId, IncomingTransactionId, CommissionDelta, Status, CreatedAt, UpdatedAt FROM TransferMatches";
+
+            var result = new List<TransferMatch>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new TransferMatch
+                {
+                    Id = reader.GetInt32(0),
+                    OutgoingTransactionId = reader.GetString(1),
+                    IncomingTransactionId = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                    CommissionDelta = reader.IsDBNull(3) ? 0 : (decimal)reader.GetDouble(3),
+                    Status = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                    CreatedAt = DateTime.Parse(reader.GetString(5)),
+                    UpdatedAt = DateTime.Parse(reader.GetString(6))
+                });
+            }
+
+            return result;
+        }
+
+        public void DeleteTransferMatch(int id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM TransferMatches WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
+        }
+
+        public void UpdateTransactionTransferInfo(int id, bool isTransfer, string status, decimal commission)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"UPDATE Transactions 
+                                    SET IsTransfer = $isTransfer, TransferStatus = $status, TransferCommission = $commission 
+                                    WHERE Id = $id";
+            command.Parameters.AddWithValue("$isTransfer", isTransfer ? 1 : 0);
+            command.Parameters.AddWithValue("$status", status ?? string.Empty);
+            command.Parameters.AddWithValue("$commission", commission);
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
         }
 
         // Budgets

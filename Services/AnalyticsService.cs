@@ -161,6 +161,7 @@ namespace doc_bursa.Services
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId)
                 .Where(t => t.Date.Year == year)
                 .ToList();
+            transactions = FilterTransfers(transactions);
 
             var operationalTransactions = TransactionFilterHelper.FilterOperationalTransactions(transactions, out _);
 
@@ -299,6 +300,11 @@ namespace doc_bursa.Services
 
             _cache.Set(cacheKey, anomalies, _defaultPolicy);
             return anomalies;
+        }
+
+        private static List<Transaction> FilterTransfers(List<Transaction> transactions, bool includeTransfers = false)
+        {
+            return includeTransfers ? transactions : transactions.Where(t => !t.IsTransfer).ToList();
         }
 
         public async Task WarmUpCacheAsync(string accountNumber, CancellationToken cancellationToken = default)

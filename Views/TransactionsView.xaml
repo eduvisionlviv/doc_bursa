@@ -45,56 +45,74 @@
             <TextBlock Text="{Binding CurrentPage, StringFormat='Сторінка {0}'}" Margin="10,0" Foreground="#E5E7EB"/>
             <TextBlock Text="{Binding TotalPages, StringFormat='з {0}'}" Foreground="#E5E7EB"/>
             <Button Content="▶" Width="40" Command="{Binding NextPageCommand}" Margin="10,0,0,0"/>
-            <Button Content="Запустити split-майстер" Margin="20,0,0,0" Command="{Binding StartSplitWizardCommand}" IsEnabled="{Binding SelectedTransaction, Converter={StaticResource NullToBoolConverter}}"/>
+            <StackPanel Orientation="Horizontal" Margin="20,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="Комісія:" Foreground="#E5E7EB" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox Width="80"
+                         Text="{Binding TransferCommissionInput, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,10,0"/>
+                <Button Content="Звірити авто" Command="{Binding ReconcileTransfersCommand}" Margin="0,0,6,0"/>
+                <Button Content="Переказ" Command="{Binding MarkAsTransferCommand}" Margin="0,0,6,0"/>
+                <Button Content="Підтвердити/оновити" Command="{Binding ConfirmTransferCommand}"/>
+            </StackPanel>
         </StackPanel>
 
         <Border Grid.Row="3" Style="{StaticResource CardStyle}">
-            <TreeView x:Name="TransactionsTree"
-                      ItemsSource="{Binding Transactions}"
-                      Background="#0F172A"
-                      BorderThickness="0"
-                      SelectedItemChanged="TransactionsTree_OnSelectedItemChanged">
-                <TreeView.Resources>
-                    <HierarchicalDataTemplate DataType="{x:Type models:Transaction}" ItemsSource="{Binding Children}">
-                        <Grid Margin="4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="100"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="160"/>
-                                <ColumnDefinition Width="140"/>
-                                <ColumnDefinition Width="120"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="{Binding Date, StringFormat='dd.MM.yyyy'}" Grid.Column="0" Foreground="#E5E7EB"/>
-                            <TextBlock Text="{Binding Description}" Grid.Column="1" Foreground="#E5E7EB"/>
-                            <TextBlock Text="{Binding Category}" Grid.Column="2" Foreground="#E5E7EB"/>
-                            <TextBlock Text="{Binding Amount, StringFormat='{}{0:N2} ₴'}"
-                                       Grid.Column="3"
-                                       Foreground="{Binding Amount, Converter={StaticResource AmountToColorConverter}}"
-                                       FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding Source}" Grid.Column="4" Foreground="#9CA3AF"/>
-                        </Grid>
-                    </HierarchicalDataTemplate>
-                </TreeView.Resources>
-                <TreeView.ItemContainerStyle>
-                    <Style TargetType="TreeViewItem">
-                        <Setter Property="Foreground" Value="#E5E7EB"/>
-                        <Setter Property="ContextMenu">
-                            <Setter.Value>
-                                <ContextMenu>
-                                    <MenuItem Header="Змінити категорію">
-                                        <MenuItem Header="Продукти" Command="{Binding DataContext.UpdateCategoryCommand, RelativeSource={RelativeSource AncestorType=TreeView}}" CommandParameter="Продукти"/>
-                                        <MenuItem Header="Транспорт" Command="{Binding DataContext.UpdateCategoryCommand, RelativeSource={RelativeSource AncestorType=TreeView}}" CommandParameter="Транспорт"/>
-                                        <MenuItem Header="Ресторани" Command="{Binding DataContext.UpdateCategoryCommand, RelativeSource={RelativeSource AncestorType=TreeView}}" CommandParameter="Ресторани"/>
-                                        <MenuItem Header="Здоров'я" Command="{Binding DataContext.UpdateCategoryCommand, RelativeSource={RelativeSource AncestorType=TreeView}}" CommandParameter="Здоров'я"/>
-                                        <MenuItem Header="Розваги" Command="{Binding DataContext.UpdateCategoryCommand, RelativeSource={RelativeSource AncestorType=TreeView}}" CommandParameter="Розваги"/>
-                                        <MenuItem Header="Інше" Command="{Binding DataContext.UpdateCategoryCommand, RelativeSource={RelativeSource AncestorType=TreeView}}" CommandParameter="Інше"/>
-                                    </MenuItem>
-                                </ContextMenu>
-                            </Setter.Value>
-                        </Setter>
-                    </Style>
-                </TreeView.ItemContainerStyle>
-            </TreeView>
+            <DataGrid ItemsSource="{Binding Transactions}" 
+                     SelectedItem="{Binding SelectedTransaction}"
+                     AutoGenerateColumns="False"
+                     CanUserAddRows="False"
+                     IsReadOnly="True"
+                     EnableRowVirtualization="True"
+                     EnableColumnVirtualization="True"
+                     VirtualizingPanel.IsVirtualizing="True"
+                     VirtualizingPanel.VirtualizationMode="Recycling"
+                     VirtualizingPanel.CacheLength="20,20"
+                     VirtualizingPanel.CacheLengthUnit="Item"
+                     GridLinesVisibility="None"
+                     HeadersVisibility="Column"
+                     Background="#0F172A"
+                     BorderThickness="0">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Дата" 
+                                       Binding="{Binding Date, StringFormat='dd.MM.yyyy'}" 
+                                       Width="100"/>
+                    <DataGridTextColumn Header="Опис" 
+                                       Binding="{Binding Description}" 
+                                       Width="*"/>
+                    <DataGridTextColumn Header="Категорія" 
+                                       Binding="{Binding Category}" 
+                                       Width="150"/>
+                    <DataGridCheckBoxColumn Header="Переказ" Binding="{Binding IsTransfer}" Width="90"/>
+                    <DataGridTextColumn Header="Статус" Binding="{Binding TransferStatus}" Width="120"/>
+                    <DataGridTextColumn Header="Комісія" Binding="{Binding TransferCommission, StringFormat='{}{0:N2}'}" Width="100"/>
+                    <DataGridTextColumn Header="Сума" 
+                                       Binding="{Binding Amount, StringFormat='{}{0:N2} ₴'}" 
+                                       Width="120">
+                        <DataGridTextColumn.ElementStyle>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{Binding Amount, Converter={StaticResource AmountToColorConverter}}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Style>
+                        </DataGridTextColumn.ElementStyle>
+                    </DataGridTextColumn>
+                    <DataGridTextColumn Header="Джерело" 
+                                       Binding="{Binding Source}" 
+                                       Width="100"/>
+                </DataGrid.Columns>
+
+                <DataGrid.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="Змінити категорію">
+                            <MenuItem Header="Продукти" Command="{Binding UpdateCategoryCommand}" CommandParameter="Продукти"/>
+                            <MenuItem Header="Транспорт" Command="{Binding UpdateCategoryCommand}" CommandParameter="Транспорт"/>
+                            <MenuItem Header="Ресторани" Command="{Binding UpdateCategoryCommand}" CommandParameter="Ресторани"/>
+                            <MenuItem Header="Здоров'я" Command="{Binding UpdateCategoryCommand}" CommandParameter="Здоров'я"/>
+                            <MenuItem Header="Розваги" Command="{Binding UpdateCategoryCommand}" CommandParameter="Розваги"/>
+                            <MenuItem Header="Інше" Command="{Binding UpdateCategoryCommand}" CommandParameter="Інше"/>
+                        </MenuItem>
+                    </ContextMenu>
+                </DataGrid.ContextMenu>
+            </DataGrid>
         </Border>
 
         <Expander Grid.Row="5" Header="Split-майстер" Foreground="#E5E7EB" IsExpanded="{Binding IsSplitWizardVisible}" Background="#0F172A" Padding="10">
