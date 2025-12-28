@@ -133,6 +133,16 @@ namespace doc_bursa.ViewModels
             var transactions = _db.GetTransactions(from, to, accounts: accountFilter);
                         var periodTransactions = transactions;
 
+                                    // 1. Отримуємо контекст (рахунки обраної групи)
+            // Якщо SelectedMasterGroup == null, список буде порожній (Глобальний контекст)
+            var contextAccountNumbers = SelectedMasterGroup != null 
+                ? new HashSet<string>(SelectedMasterGroup.AccountNumbers) 
+                : null;
+
+            // 2. ЗАСТОСОВУЄМО НОВУ ЛОГІКУ: Effective Transactions
+            // Це обробить перекази (покаже їх як витрати/доходи для групи, або приховає для глобального вигляду)
+            var effectiveTransactions = TransactionFilterHelper.GetEffectiveTransactions(transactions, contextAccountNumbers);
+
             if (from.HasValue)
             {
                 periodTransactions = periodTransactions.Where(t => t.Date >= from.Value);
@@ -143,7 +153,9 @@ namespace doc_bursa.ViewModels
                 periodTransactions = periodTransactions.Where(t => t.Date <= to.Value);
             }
 
-            var operationalTransactions = TransactionFilterHelper.FilterOperationalTransactions(periodTransactions.ToList(), out var pendingTransfers);
+            // 3. Додаткова фільтрація (прибрати "Очікує", "Планові" якщо вони потрапили в вибірку)
+            var operationalTransactions = TransactionFilterHelper.FilterOperationalTransactions(effectiveTransactions, out var pendingTransfers);            InTransitTransfers = pendingTransfers;
+                        
             InTransitTransfers = pendingTransfers;
 
             TotalIncome = operationalTransactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
