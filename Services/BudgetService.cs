@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using doc_bursa.Models;
-using Microsoft.EntityFrameworkCore;
+using doc_bursa.Infrastructure.Data;
 using Serilog;
 
 namespace doc_bursa.Services
@@ -56,7 +56,7 @@ namespace doc_bursa.Services
                 query = query.Where(p => p.AccountId == accountId.Value);
             }
 
-            return await query.OrderBy(p => p.PlannedDate).ToListAsync(ct);
+            return query.OrderBy(p => p.PlannedDate).ToList();
         }
 
         /// <summary>
@@ -68,18 +68,17 @@ namespace doc_bursa.Services
             CancellationToken ct = default)
         {
             await using var context = _databaseService.CreateDbContext();
-            var templates = await context.RecurringTransactions
+            var templates = context.RecurringTransactions
                 .Where(r => r.IsActive && r.NextDueDate >= from && r.NextDueDate <= to)
-                .ToListAsync(ct);
+                .ToList();
 
             foreach (var template in templates)
             {
                 // Перевіряємо, чи вже існує планова транзакція з цього шаблону
-                var exists = await context.PlannedTransactions
-                    .AnyAsync(p =>
+                var exists = context.PlannedTransactions
+                    .Any(p =>
                         p.RecurringTransactionId == template.Id &&
-                        p.PlannedDate.Date == template.NextDueDate.Date,
-                        ct);
+                        p.PlannedDate.Date == template.NextDueDate.Date);
 
                 if (!exists)
                 {
@@ -115,7 +114,7 @@ namespace doc_bursa.Services
             CancellationToken ct = default)
         {
             await using var context = _databaseService.CreateDbContext();
-            var planned = await context.PlannedTransactions.FindAsync(new object[] { plannedId }, ct);
+            var planned = context.PlannedTransactions.FirstOrDefault(p => p.Id == plannedId);
 
             if (planned != null)
             {
@@ -140,7 +139,7 @@ namespace doc_bursa.Services
             await using var context = _databaseService.CreateDbContext();
 
             // Поточний баланс рахунку
-            var account = await context.Accounts.FindAsync(new object[] { accountId }, ct);
+            var account = context.Accounts.FirstOrDefault(a => a.Id == accountId);
             if (account == null)
             {
                 return 0m;
@@ -149,13 +148,13 @@ namespace doc_bursa.Services
             var currentBalance = account.Balance;
 
             // Сума планових витрат до periodEnd
-            var plannedExpenses = await context.PlannedTransactions
+            var plannedExpenses = context.PlannedTransactions
                 .Where(p =>
                     p.AccountId == accountId &&
                     p.Status == PlannedTransactionStatus.Pending &&
                     p.PlannedDate <= periodEnd &&
                     p.Amount < 0) // Тільки витрати
-                .SumAsync(p => p.Amount, ct);
+                .Sum(p => p.Amount);
 
             var freeCash = currentBalance + plannedExpenses; // plannedExpenses вже негативне
 
@@ -179,13 +178,13 @@ namespace doc_bursa.Services
             var searchFrom = actual.Date.AddDays(-3);
             var searchTo = actual.Date.AddDays(3);
 
-            var candidates = await context.PlannedTransactions
+            var candidates = context.PlannedTransactions
                 .Where(p =>
                     p.AccountId == actual.AccountId &&
                     p.Status == PlannedTransactionStatus.Pending &&
                     p.PlannedDate >= searchFrom &&
                     p.PlannedDate <= searchTo)
-                .ToListAsync(ct);
+                .ToList();
 
             foreach (var candidate in candidates)
             {
