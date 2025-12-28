@@ -461,19 +461,6 @@ namespace doc_bursa.Services
 
                 conditions.Add($"Account IN ({string.Join(",", accountParameters)})");
             }
-            else if (accountsScope.HasValue)
-            {
-                var accountParameters = accountsScope.Accounts
-                    .Select((acc, index) => new { Parameter = $"$acc{index}", Value = acc })
-                    .ToList();
-
-                conditions.Add($"Account IN ({string.Join(",", accountParameters.Select(p => p.Parameter))})");
-
-                foreach (var parameter in accountParameters)
-                {
-                    command.Parameters.AddWithValue(parameter.Parameter, parameter.Value);
-                }
-            }
 
             var whereClause = conditions.Any() ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
             command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, ParentTransactionId, IsSplit FROM Transactions {whereClause} ORDER BY Date DESC";
@@ -519,9 +506,9 @@ namespace doc_bursa.Services
             return Task.Run(() => GetTransactions(from, to, category, account, accounts), cancellationToken);
         }
 
-        public List<Transaction> GetTransactionsByAccount(string account, int? masterGroupId = null)
+        public List<Transaction> GetTransactionsByAccount(string account)
         {
-            return GetTransactions(account: account, masterGroupId: masterGroupId);
+            return GetTransactions(account: account);
         }
 
         public void UpdateTransactionCategory(int id, string category)
@@ -1200,7 +1187,7 @@ namespace doc_bursa.Services
             return sources;
         }
 
-        private static DataSource ReadDataSource(SqliteDataReader reader)
+        private DataSource ReadDataSource(SqliteDataReader reader)
         {
             var lastSyncRaw = reader.IsDBNull(7) ? string.Empty : reader.GetString(7);
             var pingStatus = reader.FieldCount > 8 && !reader.IsDBNull(8) ? reader.GetString(8) : string.Empty;
@@ -1210,9 +1197,9 @@ namespace doc_bursa.Services
                 Id = reader.GetInt32(0),
                 Name = reader.GetString(1),
                 Type = reader.GetString(2),
-                ApiToken = DecryptSensitive(reader.IsDBNull(3) ? string.Empty : reader.GetString(3)),
+                ApiToken = _encryption.Decrypt(reader.IsDBNull(3) ? string.Empty : reader.GetString(3)),
                 ClientId = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                ClientSecret = DecryptSensitive(reader.IsDBNull(5) ? string.Empty : reader.GetString(5)),
+                ClientSecret = _encryption.Decrypt(reader.IsDBNull(5) ? string.Empty : reader.GetString(5)),
                 IsEnabled = reader.GetInt32(6) == 1,
                 LastSync = string.IsNullOrEmpty(lastSyncRaw) ? null : DateTime.Parse(lastSyncRaw),
                 PingStatus = pingStatus,
@@ -1286,7 +1273,8 @@ namespace doc_bursa.Services
             {
                 command.CommandText = @"
                     INSERT INTO AccountGroups (Name, Description, Color, Icon, CreatedDate, IsActive, DisplayOrder)
-                    VALUES ($name, $description, $color, $icon, $createdDate, $isActive, $displayOrder)";
+                    VALUES ($name, $description, $color, $icon, $createdDate, $isActive, $displayOrder);
+                    SELECT last_insert_rowid();";
             }
             else
             {
@@ -1306,12 +1294,14 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$isActive", group.IsActive ? 1 : 0);
             command.Parameters.AddWithValue("$displayOrder", group.DisplayOrder);
 
-            command.ExecuteNonQuery();
-
             if (group.Id == 0)
             {
-                accountGroupId = connection.LastInsertRowId;
+                accountGroupId = (long)command.ExecuteScalar()!;
                 group.Id = (int)accountGroupId;
+            }
+            else
+            {
+                command.ExecuteNonQuery();
             }
 
             var clearLinks = connection.CreateCommand();
@@ -1450,7 +1440,8 @@ namespace doc_bursa.Services
             {
                 command.CommandText = @"
                     INSERT INTO MasterGroups (Name, Description, CreatedDate, IsActive, Color, AccountNumbers)
-                    VALUES ($name, $description, $createdDate, $isActive, $color, $accountNumbers)";
+                    VALUES ($name, $description, $createdDate, $isActive, $color, $accountNumbers);
+                    SELECT last_insert_rowid();";
             }
             else
             {
@@ -1469,12 +1460,14 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$color", group.Color ?? "#2196F3");
             command.Parameters.AddWithValue("$accountNumbers", string.Join(",", group.AccountNumbers));
 
-            command.ExecuteNonQuery();
-
             if (group.Id == 0)
             {
-                masterGroupId = connection.LastInsertRowId;
+                masterGroupId = (long)command.ExecuteScalar()!;
                 group.Id = (int)masterGroupId;
+            }
+            else
+            {
+                command.ExecuteNonQuery();
             }
 
             var clearLinks = connection.CreateCommand();
@@ -1626,7 +1619,7 @@ namespace doc_bursa.Services
             return accountNumber;
         }
 
-                private static string SerializeAccounts(List<DiscoveredAccount>? accounts)
+        private static string SerializeAccounts(List<DiscoveredAccount>? accounts)
         {
             if (accounts == null || accounts.Count == 0)
                 return string.Empty;
