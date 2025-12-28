@@ -70,7 +70,8 @@ namespace doc_bursa.Services
         }
 
         // For BudgetViewModel - returns List<BudgetAlert>
-        public List<BudgetAlert> GetAlerts()
+        public List<BudgetAlert> 73
+            ()
         {
             var alerts = new List<BudgetAlert>();
             var budgets = GetBudgets().Where(b => b.IsActive);
@@ -85,9 +86,6 @@ namespace doc_bursa.Services
                         BudgetId = budget.Id,
                         BudgetName = budget.Name,
                         Message = $"Budget '{budget.Name}': {percentage:F1}% used ({budget.Spent}/{budget.Limit})",
-                        Severity = percentage >= 100 ? AlertSeverity.Critical : 
-                                   percentage >= 90 ? AlertSeverity.Warning : AlertSeverity.Info,
-                        Percentage = percentage
                     });
                 }
             }
