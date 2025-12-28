@@ -10,7 +10,7 @@ namespace doc_bursa.Views
         public TransactionsView()
         {
             InitializeComponent();
-            DataContext = new TransactionsViewModel();
+            // DataContext встановлюється з MainViewModel
         }
 
         private void TransactionsTree_OnSelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)

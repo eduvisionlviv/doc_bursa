@@ -47,7 +47,7 @@ namespace doc_bursa.Services
 
         public List<Transaction> GetTransactions(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, int? masterGroupId = null)
         {
-            return _databaseService.GetTransactions(from, to, category, account, masterGroupId);
+            return _databaseService.GetTransactions(from, to, category, account, null);
         }
 
         public List<Transaction> GetTransactionTree()
@@ -83,6 +83,26 @@ namespace doc_bursa.Services
             }
 
             return effective;
+        }
+
+        private List<Transaction> BuildHierarchy(List<Transaction> transactions)
+        {
+            var lookup = transactions.ToDictionary(t => t.TransactionId);
+            var roots = new List<Transaction>();
+
+            foreach (var transaction in transactions)
+            {
+                if (string.IsNullOrEmpty(transaction.ParentTransactionId))
+                {
+                    roots.Add(transaction);
+                }
+                else if (lookup.TryGetValue(transaction.ParentTransactionId, out var parent))
+                {
+                    parent.Children.Add(transaction);
+                }
+            }
+
+            return roots;
         }
 
         public bool MarkAsDuplicate(Guid transactionId)
@@ -128,7 +148,6 @@ namespace doc_bursa.Services
             }, cancellationToken);
         }
 
-        // 👇 ЦЕЙ МЕТОД БУВ ВІДСУТНІЙ, АЛЕ ВИКЛИКАВСЯ В SOURCESVIEWMODEL
         public Task<int> ImportTransactionsAsync(IEnumerable<Transaction> transactions, CancellationToken cancellationToken = default)
         {
             return AddTransactionsBatchAsync(transactions, cancellationToken);
@@ -145,7 +164,6 @@ namespace doc_bursa.Services
             return transaction;
         }
 
-                // Методи для Split (заглушки для компіляції)
         public void ValidateSplitTotals(Transaction parent, IEnumerable<Transaction> children)
         {
             if (children == null) return;
@@ -156,49 +174,37 @@ namespace doc_bursa.Services
             }
         }
 
-            public async Task ApplySplit(Transaction parent, List<Transaction> children)
-    {
-        // 1. ВАЛІДАЦІЯ (Бізнес-правило: Сума частин = Сумі цілого)
-        // Використовуємо Math.Abs для коректної роботи і з витратами (-), і з доходами (+)
-        decimal parentAmount = Math.Abs(parent.Amount);
-        decimal childrenTotal = children.Sum(c => Math.Abs(c.Amount));
-
-        if (Math.Abs(parentAmount - childrenTotal) > 0.01m)
+        public async Task ApplySplit(Transaction parent, List<Transaction> children)
         {
-            throw new InvalidOperationException($"Помилка балансу: Сума частин ({childrenTotal}) не збігається з транзакцією ({parentAmount}).");
-        }
+            decimal parentAmount = Math.Abs(parent.Amount);
+            decimal childrenTotal = children.Sum(c => Math.Abs(c.Amount));
 
-        // 2. ПІДГОТОВКА ДАНИХ
-        // Маркуємо батьківську транзакцію, щоб вона не враховувалась у звітах двічі
-        parent.IsSplit = true; 
-        
-        // Налаштовуємо дочірні транзакції
-        foreach (var child in children)
-        {
-            // Критично: генеруємо новий ID, бо це внутрішні сутності FinDesk, банк про них не знає
-            child.TransactionId = Guid.NewGuid().ToString(); 
+            if (Math.Abs(parentAmount - childrenTotal) > 0.01m)
+            {
+                throw new InvalidOperationException($"Помилка балансу: Сума частин ({childrenTotal}) не збігається з транзакцією ({parentAmount}).");
+            }
+
+            parent.IsSplit = true; 
             
-            // Зв'язок
-            child.ParentTransactionId = parent.TransactionId;
+            foreach (var child in children)
+            {
+                child.TransactionId = Guid.NewGuid().ToString(); 
+                child.ParentTransactionId = parent.TransactionId;
+                child.Date = parent.Date;
+                child.AccountId = parent.AccountId;
+                child.Account = parent.Account;
+                child.Currency = parent.Currency;
+                child.Source = "Split";
+                child.IsSplit = false;
+            }
+
+            var batch = new List<Transaction> { parent };
+            batch.AddRange(children);
+
+            await _databaseService.SaveTransactionsAsync(batch);
             
-            // Спадкування метаданих
-            child.Date = parent.Date;
-            child.AccountId = parent.AccountId;
-            child.Account = parent.Account;
-            child.Currency = parent.Currency;
-            child.Source = "Split"; // Маркер, що це штучний запис
-            child.IsSplit = false;  // Дитина не може бути розділена (поки що)
+            _logger.Information("Transaction {Tid} split into {Count} parts", parent.TransactionId, children.Count);
         }
-
-        // 3. АТОМАРНЕ ЗБЕРЕЖЕННЯ (Transaction Scope)
-        var batch = new List<Transaction> { parent };
-        batch.AddRange(children);
-
-        // Використовуємо існуючий метод, який огортає все в SQL Transaction
-        await _databaseService.SaveTransactionsAsync(batch);
-        
-        _logger.Information("Transaction {Tid} split into {Count} parts", parent.TransactionId, children.Count);
-    }
 
         public Transaction CreateChildTransaction(Transaction parent)
         {
@@ -207,7 +213,6 @@ namespace doc_bursa.Services
                 Date = parent.Date,
                 AccountId = parent.AccountId,
                 Currency = parent.Currency,
-                // Копіюємо інші потрібні поля
             };
         }
     }
