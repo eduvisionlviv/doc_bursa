@@ -10,6 +10,14 @@ namespace doc_bursa.Services
 {
     public class MonobankService
     {
+
+                private readonly HttpClient _httpClient;
+        private readonly Dictionary<string, List<DiscoveredAccount>> _discoveryCache = new();
+
+        public MonobankService(HttpClient httpClient)
+        {
+            _httpClient = httpClient;
+        }
         private const string BaseUrl = "https://api.monobank.ua";
         private static readonly LruCache<string, List<Transaction>> _cache = new(capacity: 64, defaultTtl: TimeSpan.FromMinutes(5));
         private static readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy = Policy<HttpResponseMessage>
@@ -22,15 +30,10 @@ namespace doc_bursa.Services
             string cacheKey = $"{token}:{accountId}:{from:O}:{to:O}";
             return await _cache.GetOrAddAsync(cacheKey, async () =>
             {
-                using var client = new HttpClient();
-                client.DefaultRequestHeaders.Add("X-Token", token);
-                long fromUnix = ((DateTimeOffset)from).ToUnixTimeSeconds();
-                long toUnix = ((DateTimeOffset)to).ToUnixTimeSeconds();
+            _httpClient.DefaultRequestHeaders.Add("X-Token", token);                long fromUnix = ((DateTimeOffset)from).ToUnixTimeSeconds();
                 string account = string.IsNullOrWhiteSpace(accountId) ? "0" : accountId;
-
                 string url = $"{BaseUrl}/personal/statement/{account}/{fromUnix}/{toUnix}";
-                var response = await _retryPolicy.ExecuteAsync(() => client.GetAsync(url));
-
+            var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
                 if (!response.IsSuccessStatusCode)
                 {
                     if ((int)response.StatusCode == 429)
