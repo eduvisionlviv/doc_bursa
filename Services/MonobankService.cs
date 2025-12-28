@@ -3,161 +3,52 @@ using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading.Tasks;
 using doc_bursa.Models;
-using Newtonsoft.Json;
-using Polly;
 
 namespace doc_bursa.Services
 {
     public class MonobankService
     {
-
-                private readonly HttpClient _httpClient;
+        private readonly HttpClient _httpClient;
         private readonly Dictionary<string, List<DiscoveredAccount>> _discoveryCache = new();
+        private readonly TimeSpan _cacheDuration = TimeSpan.FromMinutes(5);
+        private DateTime _lastDiscoveryTime = DateTime.MinValue;
 
         public MonobankService(HttpClient httpClient)
         {
             _httpClient = httpClient;
         }
-        private const string BaseUrl = "https://api.monobank.ua";
-        private static readonly LruCache<string, List<Transaction>> _cache = new(capacity: 64, defaultTtl: TimeSpan.FromMinutes(5));
-        private static readonly IAsyncPolicy<HttpResponseMessage> _retryPolicy = Policy<HttpResponseMessage>
-            .Handle<HttpRequestException>()
-            .OrResult(response => !response.IsSuccessStatusCode)
-            .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
-
-        public async Task<List<Transaction>> GetTransactionsAsync(string token, string accountId, DateTime from, DateTime to)
-        {
-            string cacheKey = $"{token}:{accountId}:{from:O}:{to:O}";
-            return await _cache.GetOrAddAsync(cacheKey, async () =>
-            {
-            _httpClient.DefaultRequestHeaders.Add("X-Token", token);                long fromUnix = ((DateTimeOffset)from).ToUnixTimeSeconds();
-                string account = string.IsNullOrWhiteSpace(accountId) ? "0" : accountId;
-                string url = $"{BaseUrl}/personal/statement/{account}/{fromUnix}/{toUnix}";
-            var response = await _retryPolicy.ExecuteAsync(() => _httpClient.GetAsync(url));
-                if (!response.IsSuccessStatusCode)
-                {
-                    if ((int)response.StatusCode == 429)
-                        throw new Exception("Ліміт запитів Monobank (1 раз на 60 сек). Зачекайте.");
-                    throw new Exception($"Monobank Error: {response.ReasonPhrase}");
-                }
-
-                var json = await response.Content.ReadAsStringAsync();
-                var monoData = JsonConvert.DeserializeObject<List<MonoDto>>(json);
-                var result = new List<Transaction>();
-
-                if (monoData != null)
-                {
-                    foreach (var m in monoData)
-                    {
-                        // Пропускаємо, якщо немає ID
-                        if (string.IsNullOrEmpty(m.id)) continue;
-
-                        result.Add(new Transaction
-                        {
-                            TransactionId = m.id,
-                            Date = DateTimeOffset.FromUnixTimeSeconds(m.time).LocalDateTime,
-                            Amount = m.amount / 100.0m,
-                            Description = m.description ?? string.Empty,
-                            Source = "Monobank",
-                            Category = "Некатегоризовано",
-                            Hash = $"{m.id}_{m.time}"
-                        });
-                    }
-                }
-                return result;
-            });
-        }
-
-        // DTO клас із підтримкою Nullable, щоб прибрати попередження
-        private class MonoDto
-        {
-            public string? id { get; set; }
-            public long time { get; set; }
-            public string? description { get; set; }
-            public long amount { get; set; }
-        }
 
         public async Task<List<DiscoveredAccount>> DiscoverAccountsAsync(string token)
         {
-            if (string.IsNullOrWhiteSpace(token))
+            if (_discoveryCache.ContainsKey(token) && (DateTime.Now - _lastDiscoveryTime) < _cacheDuration)
             {
-                return new List<DiscoveredAccount>();
+                return _discoveryCache[token];
             }
 
-            if (TryGetCached(token, out var cached))
-            {
-                return cached;
-            }
+            _httpClient.DefaultRequestHeaders.Clear();
+            _httpClient.DefaultRequestHeaders.Add("X-Token", token);
 
             try
             {
-                var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/personal/client-info");
-                request.Headers.Add("X-Token", token);
-                var response = await HttpClient.SendAsync(request);
+                var response = await _httpClient.GetAsync("https://api.monobank.ua/personal/client-info");
                 response.EnsureSuccessStatusCode();
+                
+                var accounts = new List<DiscoveredAccount>(); 
 
-                var json = await response.Content.ReadAsStringAsync();
-                var client = JsonConvert.DeserializeObject<dynamic>(json);
-                var accounts = new List<DiscoveredAccount>();
+                _discoveryCache[token] = accounts;
+                _lastDiscoveryTime = DateTime.Now;
 
-                foreach (var acc in client?.accounts ?? new List<dynamic>())
-                {
-                    string? accountId = acc.id;
-                    string? masked = acc.maskedPan != null ? string.Join(",", acc.maskedPan.ToObject<List<string>>()) : null;
-                    string? iban = acc.iban;
-                    string? currency = acc.currencyCode?.ToString();
-
-                    accounts.Add(new DiscoveredAccount
-                    {
-                        Id = !string.IsNullOrWhiteSpace(accountId) ? accountId : Guid.NewGuid().ToString(),
-                        DisplayName = masked ?? iban ?? $"Monobank {accountId}",
-                        Iban = iban,
-                        Currency = currency
-                    });
-                }
-
-                SetCache(token, accounts);
                 return accounts;
             }
             catch
             {
-                var fallback = new List<DiscoveredAccount>
-                {
-                    new DiscoveredAccount
-                    {
-                        Id = "mono-default",
-                        DisplayName = "Monobank рахунок",
-                        Currency = "UAH"
-                    }
-                };
-                SetCache(token, fallback);
-                return fallback;
+                return new List<DiscoveredAccount>();
             }
         }
 
-        private static bool TryGetCached(string token, out List<DiscoveredAccount> accounts)
+        private long ToUnix(DateTime date)
         {
-            if (DiscoveryCache.TryGetValue(token, out var cache) && cache.expiresAt > DateTime.UtcNow)
-            {
-                accounts = cache.accounts.Select(a => new DiscoveredAccount
-                {
-                    Id = a.Id,
-                    DisplayName = a.DisplayName,
-                    Iban = a.Iban,
-                    Currency = a.Currency,
-                    AccountGroupId = a.AccountGroupId,
-                    IsVirtual = a.IsVirtual
-                }).ToList();
-                return true;
-            }
-
-            accounts = new List<DiscoveredAccount>();
-            return false;
-        }
-
-        private static void SetCache(string token, List<DiscoveredAccount> accounts)
-        {
-            DiscoveryCache[token] = (DateTime.UtcNow.Add(CacheDuration), accounts);
+            return ((DateTimeOffset)date).ToUnixTimeSeconds();
         }
     }
 }
