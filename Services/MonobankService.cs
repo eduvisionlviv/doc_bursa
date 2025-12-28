@@ -73,5 +73,88 @@ namespace doc_bursa.Services
             public string? description { get; set; }
             public long amount { get; set; }
         }
+
+        public async Task<List<DiscoveredAccount>> DiscoverAccountsAsync(string token)
+        {
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return new List<DiscoveredAccount>();
+            }
+
+            if (TryGetCached(token, out var cached))
+            {
+                return cached;
+            }
+
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/personal/client-info");
+                request.Headers.Add("X-Token", token);
+                var response = await HttpClient.SendAsync(request);
+                response.EnsureSuccessStatusCode();
+
+                var json = await response.Content.ReadAsStringAsync();
+                var client = JsonConvert.DeserializeObject<dynamic>(json);
+                var accounts = new List<DiscoveredAccount>();
+
+                foreach (var acc in client?.accounts ?? new List<dynamic>())
+                {
+                    string? accountId = acc.id;
+                    string? masked = acc.maskedPan != null ? string.Join(",", acc.maskedPan.ToObject<List<string>>()) : null;
+                    string? iban = acc.iban;
+                    string? currency = acc.currencyCode?.ToString();
+
+                    accounts.Add(new DiscoveredAccount
+                    {
+                        Id = !string.IsNullOrWhiteSpace(accountId) ? accountId : Guid.NewGuid().ToString(),
+                        DisplayName = masked ?? iban ?? $"Monobank {accountId}",
+                        Iban = iban,
+                        Currency = currency
+                    });
+                }
+
+                SetCache(token, accounts);
+                return accounts;
+            }
+            catch
+            {
+                var fallback = new List<DiscoveredAccount>
+                {
+                    new DiscoveredAccount
+                    {
+                        Id = "mono-default",
+                        DisplayName = "Monobank рахунок",
+                        Currency = "UAH"
+                    }
+                };
+                SetCache(token, fallback);
+                return fallback;
+            }
+        }
+
+        private static bool TryGetCached(string token, out List<DiscoveredAccount> accounts)
+        {
+            if (DiscoveryCache.TryGetValue(token, out var cache) && cache.expiresAt > DateTime.UtcNow)
+            {
+                accounts = cache.accounts.Select(a => new DiscoveredAccount
+                {
+                    Id = a.Id,
+                    DisplayName = a.DisplayName,
+                    Iban = a.Iban,
+                    Currency = a.Currency,
+                    AccountGroupId = a.AccountGroupId,
+                    IsVirtual = a.IsVirtual
+                }).ToList();
+                return true;
+            }
+
+            accounts = new List<DiscoveredAccount>();
+            return false;
+        }
+
+        private static void SetCache(string token, List<DiscoveredAccount> accounts)
+        {
+            DiscoveryCache[token] = (DateTime.UtcNow.Add(CacheDuration), accounts);
+        }
     }
 }

@@ -17,6 +17,7 @@ namespace doc_bursa.Services
         private readonly TransactionService _transactionService;
         private readonly CategorizationService _categorization;
         private readonly ILogger _logger;
+        private string _defaultAccountName = string.Empty;
 
         public ExcelImportService(DatabaseService db, CategorizationService categorization, TransactionService transactionService)
         {
@@ -31,10 +32,13 @@ namespace doc_bursa.Services
             string filePath,
             string? bankType = null,
             IProgress<int>? progress = null,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            int? accountGroupId = null,
+            string? virtualAccountName = null)
         {
             try
             {
+                _defaultAccountName = _db.EnsureVirtualAccountForGroup(accountGroupId, virtualAccountName);
                 using var package = new ExcelPackage(new FileInfo(filePath));
                 var worksheet = package.Workbook.Worksheets[0];
                 
@@ -140,7 +144,9 @@ namespace doc_bursa.Services
             transaction.Date = parsedDate;
             transaction.Description = mapped.Description;
             transaction.Amount = amount;
-            transaction.Account = mapped.Account ?? string.Empty;
+            transaction.Account = string.IsNullOrWhiteSpace(mapped.Account)
+                ? _defaultAccountName
+                : mapped.Account;
             transaction.Balance = mapped.Balance ?? 0m;
             transaction.Source = mapped.Source ?? format.ToString();
             transaction.Category = !string.IsNullOrWhiteSpace(mapped.Category)
@@ -154,4 +160,3 @@ namespace doc_bursa.Services
         }
     }
 }
-

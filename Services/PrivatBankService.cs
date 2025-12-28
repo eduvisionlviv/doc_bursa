@@ -103,5 +103,103 @@ namespace doc_bursa.Services
                 Hash = $"{item["ID"]}_{item["REF"]}"
             };
         }
+
+        public async Task<List<DiscoveredAccount>> DiscoverAccountsAsync(string token, string clientId)
+        {
+            var cacheKey = $"{token}-{clientId}";
+            if (TryGetCached(cacheKey, out var cached))
+            {
+                return cached;
+            }
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                return new List<DiscoveredAccount>();
+            }
+
+            try
+            {
+                var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/personal/client-info");
+                request.Headers.Add("token", token);
+                request.Headers.Add("clientId", clientId ?? string.Empty);
+                request.Headers.Add("User-Agent", "FinDesk Client");
+
+                var response = await HttpClient.SendAsync(request);
+                var accounts = new List<DiscoveredAccount>();
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync();
+                    var parsed = JsonConvert.DeserializeObject<JObject>(json);
+                    var items = parsed?["accounts"] as JArray;
+                    if (items != null)
+                    {
+                        foreach (var item in items)
+                        {
+                            var id = item?["id"]?.ToString() ?? Guid.NewGuid().ToString();
+                            accounts.Add(new DiscoveredAccount
+                            {
+                                Id = id,
+                                DisplayName = item?["name"]?.ToString() ?? $"PrivatBank {id}",
+                                Iban = item?["iban"]?.ToString(),
+                                Currency = item?["currency"]?.ToString()
+                            });
+                        }
+                    }
+                }
+
+                if (!accounts.Any())
+                {
+                    accounts.Add(new DiscoveredAccount
+                    {
+                        Id = string.IsNullOrWhiteSpace(clientId) ? Guid.NewGuid().ToString() : clientId,
+                        DisplayName = "PrivatBank рахунок",
+                        Currency = "UAH"
+                    });
+                }
+
+                SetCache(cacheKey, accounts);
+                return accounts;
+            }
+            catch
+            {
+                var fallback = new List<DiscoveredAccount>
+                {
+                    new DiscoveredAccount
+                    {
+                        Id = string.IsNullOrWhiteSpace(clientId) ? Guid.NewGuid().ToString() : clientId,
+                        DisplayName = "PrivatBank рахунок",
+                        Currency = "UAH"
+                    }
+                };
+                SetCache(cacheKey, fallback);
+                return fallback;
+            }
+        }
+
+        private static bool TryGetCached(string key, out List<DiscoveredAccount> accounts)
+        {
+            if (DiscoveryCache.TryGetValue(key, out var cache) && cache.expiresAt > DateTime.UtcNow)
+            {
+                accounts = cache.accounts.Select(a => new DiscoveredAccount
+                {
+                    Id = a.Id,
+                    DisplayName = a.DisplayName,
+                    Iban = a.Iban,
+                    Currency = a.Currency,
+                    AccountGroupId = a.AccountGroupId,
+                    IsVirtual = a.IsVirtual
+                }).ToList();
+                return true;
+            }
+
+            accounts = new List<DiscoveredAccount>();
+            return false;
+        }
+
+        private static void SetCache(string key, List<DiscoveredAccount> accounts)
+        {
+            DiscoveryCache[key] = (DateTime.UtcNow.Add(CacheDuration), accounts);
+        }
     }
 }
