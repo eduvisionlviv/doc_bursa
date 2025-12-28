@@ -4,7 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using doc_bursa.Models;
-using Microsoft.EntityFrameworkCore;
+using doc_bursa.Infrastructure.Data;
 using Serilog;
 
 namespace doc_bursa.Services
@@ -30,9 +30,9 @@ namespace doc_bursa.Services
         public async Task<List<ReconciliationRule>> GetActiveRulesAsync(CancellationToken ct = default)
         {
             await using var context = _databaseService.CreateDbContext();
-            return await context.ReconciliationRules
+            return context.ReconciliationRules
                 .Where(r => r.IsActive)
-                .ToListAsync(ct);
+                .ToList();
         }
 
         /// <summary>
@@ -66,14 +66,14 @@ namespace doc_bursa.Services
             var searchTo = sourceTransaction.Date.AddDays(rule.MaxDaysDifference);
             var expectedAmount = Math.Abs(sourceTransaction.Amount);
 
-            var candidates = await context.Transactions
+            var candidates = context.Transactions
                 .Where(t =>
                     t.AccountId == rule.TargetAccountId &&
                     t.Date >= searchFrom &&
                     t.Date <= searchTo &&
                     t.Amount > 0 && // Дохід
                     string.IsNullOrEmpty(t.TransferId)) // Ще не зв'язана
-                .ToListAsync(ct);
+                .ToList();
 
             foreach (var candidate in candidates)
             {
@@ -102,8 +102,8 @@ namespace doc_bursa.Services
 
             await using var context = _databaseService.CreateDbContext();
 
-            var sourceDb = await context.Transactions.FindAsync(new object[] { source.Id }, ct);
-            var targetDb = await context.Transactions.FindAsync(new object[] { target.Id }, ct);
+            var sourceDb = context.Transactions.FirstOrDefault(t => t.Id == source.Id);
+            var targetDb = context.Transactions.FirstOrDefault(t => t.Id == target.Id);
 
             if (sourceDb == null || targetDb == null)
             {
@@ -170,7 +170,7 @@ namespace doc_bursa.Services
                 {
                     // Пара не знайдена - встановлюємо статус "В дорозі"
                     await using var context = _databaseService.CreateDbContext();
-                    var txDb = await context.Transactions.FindAsync(new object[] { transaction.Id }, ct);
+                    var txDb = context.Transactions.FirstOrDefault(t => t.Id == transaction.Id);
                     if (txDb != null)
                     {
                         txDb.Status = TransactionStatus.InTransit;
