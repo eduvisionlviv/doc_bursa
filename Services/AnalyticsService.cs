@@ -470,6 +470,7 @@ namespace doc_bursa.Services
             var plannedItems = RecurringTransactionPlanner.Generate(
                 rules, 
                 actualTransactions, 
+                
                 projectionStart, 
                 to
             );
@@ -480,9 +481,13 @@ namespace doc_bursa.Services
                 .Where(p => p.Amount < 0) // Тільки витрати
                 .Sum(p => Math.Abs(p.Amount));
 
+                                return futureExpenses;
+
         }
     public enum TrendGranularity
     {
+
+                return futureExpenses;
         Daily,
         Weekly,
         Monthly
