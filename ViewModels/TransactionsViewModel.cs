@@ -15,6 +15,7 @@ namespace doc_bursa.ViewModels
 
         private readonly DatabaseService _db;
         private readonly CategorizationService _categorization;
+        private readonly TransactionService _transactionService;
         private List<Transaction> _filteredTransactions = new();
 
         [ObservableProperty]
@@ -36,7 +37,13 @@ namespace doc_bursa.ViewModels
         private int totalPages = 1;
 
         [ObservableProperty]
-        private MasterGroup? selectedMasterGroup;
+        private bool isSplitWizardVisible;
+
+        [ObservableProperty]
+        private ObservableCollection<Transaction> splitChildren = new();
+
+        [ObservableProperty]
+        private string splitValidationMessage = string.Empty;
 
         public List<string> Categories { get; } = new()
         {
@@ -47,6 +54,8 @@ namespace doc_bursa.ViewModels
         {
             _db = databaseService ?? new DatabaseService();
             _categorization = new CategorizationService(_db);
+            var deduplication = new DeduplicationService(_db);
+            _transactionService = new TransactionService(_db, deduplication);
             LoadTransactions();
         }
 
@@ -58,17 +67,15 @@ namespace doc_bursa.ViewModels
 
             if (!string.IsNullOrEmpty(SearchText))
             {
-                allTransactions = allTransactions
-                    .Where(t => t.Description.Contains(SearchText, StringComparison.OrdinalIgnoreCase))
-                    .ToList();
+                filtered = filtered.Where(MatchesSearch);
             }
 
             if (SelectedCategory != "Всі")
             {
-                allTransactions = allTransactions.Where(t => t.Category == SelectedCategory).ToList();
+                filtered = filtered.Where(MatchesCategory);
             }
 
-            _filteredTransactions = allTransactions;
+            _filteredTransactions = filtered.ToList();
             TotalPages = Math.Max(1, (int)Math.Ceiling(_filteredTransactions.Count / (double)PageSize));
             if (CurrentPage > TotalPages)
             {
@@ -119,6 +126,82 @@ namespace doc_bursa.ViewModels
             }
         }
 
+        [RelayCommand]
+        private void StartSplitWizard()
+        {
+            if (SelectedTransaction == null)
+            {
+                return;
+            }
+
+            IsSplitWizardVisible = true;
+            BuildSplitDraft();
+        }
+
+        [RelayCommand]
+        private void AddSplitRow()
+        {
+            if (SelectedTransaction == null)
+            {
+                return;
+            }
+
+            var child = _transactionService.CreateChildTransaction(
+                SelectedTransaction,
+                0,
+                $"{SelectedTransaction.Description} (частина)",
+                SelectedTransaction.Category,
+                SelectedTransaction.Account);
+
+            SplitChildren.Add(child);
+        }
+
+        [RelayCommand]
+        private void RemoveSplitRow(Transaction? child)
+        {
+            if (child == null)
+            {
+                return;
+            }
+
+            SplitChildren.Remove(child);
+        }
+
+        [RelayCommand]
+        private void SaveSplit()
+        {
+            if (SelectedTransaction == null)
+            {
+                return;
+            }
+
+            if (!_transactionService.ValidateSplitTotals(SelectedTransaction, SplitChildren, out var diff))
+            {
+                SplitValidationMessage = $"Сума дочірніх не відповідає батьківській (різниця {diff:N2}).";
+                return;
+            }
+
+            try
+            {
+                _transactionService.ApplySplit(SelectedTransaction, SplitChildren);
+                SplitValidationMessage = string.Empty;
+                IsSplitWizardVisible = false;
+                LoadTransactions();
+            }
+            catch (Exception ex)
+            {
+                SplitValidationMessage = ex.Message;
+            }
+        }
+
+        [RelayCommand]
+        private void CancelSplitWizard()
+        {
+            IsSplitWizardVisible = false;
+            SplitChildren.Clear();
+            SplitValidationMessage = string.Empty;
+        }
+
         partial void OnSearchTextChanged(string value)
         {
             CurrentPage = 1;
@@ -131,10 +214,65 @@ namespace doc_bursa.ViewModels
             LoadTransactions();
         }
 
-        partial void OnSelectedMasterGroupChanged(MasterGroup? value)
+        partial void OnSelectedTransactionChanged(Transaction? value)
         {
-            CurrentPage = 1;
-            LoadTransactions();
+            if (value != null && IsSplitWizardVisible)
+            {
+                BuildSplitDraft();
+            }
+        }
+
+        private void BuildSplitDraft()
+        {
+            SplitChildren.Clear();
+            SplitValidationMessage = string.Empty;
+
+            if (SelectedTransaction == null)
+            {
+                return;
+            }
+
+            var source = SelectedTransaction.Children.Any()
+                ? SelectedTransaction.Children
+                : new ObservableCollection<Transaction> { _transactionService.CreateChildTransaction(SelectedTransaction, SelectedTransaction.Amount, SelectedTransaction.Description, SelectedTransaction.Category, SelectedTransaction.Account) };
+
+            foreach (var child in source)
+            {
+                SplitChildren.Add(new Transaction
+                {
+                    TransactionId = child.TransactionId,
+                    ParentTransactionId = child.ParentTransactionId,
+                    Date = child.Date,
+                    Amount = child.Amount,
+                    Description = child.Description,
+                    Category = child.Category,
+                    Source = child.Source,
+                    Counterparty = child.Counterparty,
+                    Account = child.Account,
+                    Balance = child.Balance,
+                    Hash = child.Hash,
+                    IsDuplicate = child.IsDuplicate,
+                    OriginalTransactionId = child.OriginalTransactionId,
+                    IsSplit = child.IsSplit
+                });
+            }
+        }
+
+        private bool MatchesSearch(Transaction transaction)
+        {
+            return transaction.Description.Contains(SearchText, StringComparison.OrdinalIgnoreCase)
+                   || transaction.Children.Any(MatchesSearch);
+        }
+
+        private bool MatchesCategory(Transaction transaction)
+        {
+            if (SelectedCategory == "Всі")
+            {
+                return true;
+            }
+
+            return string.Equals(transaction.Category, SelectedCategory, StringComparison.OrdinalIgnoreCase)
+                   || transaction.Children.Any(MatchesCategory);
         }
     }
 }

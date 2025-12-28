@@ -51,7 +51,9 @@ namespace doc_bursa.Services
                     Balance REAL,
                     Hash TEXT UNIQUE,
                     IsDuplicate INTEGER DEFAULT 0,
-                    OriginalTransactionId TEXT
+                    OriginalTransactionId TEXT,
+                    ParentTransactionId TEXT,
+                    IsSplit INTEGER DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS DataSources (
@@ -176,6 +178,8 @@ namespace doc_bursa.Services
             AddColumnIfMissing("IsDuplicate", "INTEGER DEFAULT 0");
             AddColumnIfMissing("OriginalTransactionId", "TEXT");
             AddColumnIfMissing("Counterparty", "TEXT");
+            AddColumnIfMissing("ParentTransactionId", "TEXT");
+            AddColumnIfMissing("IsSplit", "INTEGER DEFAULT 0");
         }
 
         private static void EnsureDataSourceColumns(SqliteConnection connection)
@@ -269,8 +273,8 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO Transactions 
-                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId)
-                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid)
+                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, ParentTransactionId, IsSplit)
+                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid, $parentTid, $isSplit)
             ";
 
             command.Parameters.AddWithValue("$tid", transaction.TransactionId);
@@ -285,6 +289,8 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$hash", transaction.Hash ?? string.Empty);
             command.Parameters.AddWithValue("$isDuplicate", transaction.IsDuplicate ? 1 : 0);
             command.Parameters.AddWithValue("$originalTid", transaction.OriginalTransactionId ?? string.Empty);
+            command.Parameters.AddWithValue("$parentTid", transaction.ParentTransactionId ?? string.Empty);
+            command.Parameters.AddWithValue("$isSplit", transaction.IsSplit ? 1 : 0);
             command.ExecuteNonQuery();
 
             _logger.Information("Transaction saved: {TransactionId}", transaction.TransactionId);
@@ -299,8 +305,8 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO Transactions 
-                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId)
-                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid)
+                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, ParentTransactionId, IsSplit)
+                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid, $parentTid, $isSplit)
             ";
 
             var tidParam = command.Parameters.Add("$tid", SqliteType.Text);
@@ -315,6 +321,8 @@ namespace doc_bursa.Services
             var hashParam = command.Parameters.Add("$hash", SqliteType.Text);
             var isDuplicateParam = command.Parameters.Add("$isDuplicate", SqliteType.Integer);
             var originalTidParam = command.Parameters.Add("$originalTid", SqliteType.Text);
+            var parentTidParam = command.Parameters.Add("$parentTid", SqliteType.Text);
+            var isSplitParam = command.Parameters.Add("$isSplit", SqliteType.Integer);
 
             foreach (var transaction in transactions)
             {
@@ -330,6 +338,8 @@ namespace doc_bursa.Services
                 hashParam.Value = transaction.Hash ?? string.Empty;
                 isDuplicateParam.Value = transaction.IsDuplicate ? 1 : 0;
                 originalTidParam.Value = transaction.OriginalTransactionId ?? string.Empty;
+                parentTidParam.Value = transaction.ParentTransactionId ?? string.Empty;
+                isSplitParam.Value = transaction.IsSplit ? 1 : 0;
 
                 command.ExecuteNonQuery();
             }
@@ -414,7 +424,7 @@ namespace doc_bursa.Services
             }
 
             var whereClause = conditions.Any() ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
-            command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId FROM Transactions {whereClause} ORDER BY Date DESC";
+            command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, ParentTransactionId, IsSplit FROM Transactions {whereClause} ORDER BY Date DESC";
 
             var transactions = new List<Transaction>();
             using var reader = command.ExecuteReader();
@@ -441,7 +451,9 @@ namespace doc_bursa.Services
                     Balance = reader.IsDBNull(9) ? 0 : (decimal)reader.GetDouble(9),
                     Hash = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
                     IsDuplicate = !reader.IsDBNull(11) && reader.GetInt32(11) == 1,
-                    OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12)
+                    OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
+                    ParentTransactionId = reader.IsDBNull(13) ? string.Empty : reader.GetString(13),
+                    IsSplit = !reader.IsDBNull(14) && reader.GetInt32(14) == 1
                 };
 
                 transactions.Add(transaction);
@@ -483,13 +495,24 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
         }
 
+        public void DeleteChildTransactions(string parentTransactionId)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM Transactions WHERE ParentTransactionId = $parentTid";
+            command.Parameters.AddWithValue("$parentTid", parentTransactionId);
+            command.ExecuteNonQuery();
+        }
+
         public Transaction? GetTransactionByTransactionId(string transactionId)
         {
             using var connection = new SqliteConnection(_connectionString);
             connection.Open();
 
             var command = connection.CreateCommand();
-            command.CommandText = @"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId 
+            command.CommandText = @"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, ParentTransactionId, IsSplit 
                                     FROM Transactions WHERE TransactionId = $tid LIMIT 1";
             command.Parameters.AddWithValue("$tid", transactionId);
 
@@ -514,7 +537,9 @@ namespace doc_bursa.Services
                     Balance = reader.IsDBNull(9) ? 0 : (decimal)reader.GetDouble(9),
                     Hash = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
                     IsDuplicate = !reader.IsDBNull(11) && reader.GetInt32(11) == 1,
-                    OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12)
+                    OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
+                    ParentTransactionId = reader.IsDBNull(13) ? string.Empty : reader.GetString(13),
+                    IsSplit = !reader.IsDBNull(14) && reader.GetInt32(14) == 1
                 };
             }
 

@@ -44,7 +44,8 @@ namespace doc_bursa.Services
         // Експорт транзакцій у форматі CSV
         public async Task<bool> ExportToCsvAsync(IEnumerable<Transaction> transactions, string filePath)
         {
-            var rows = transactions.Select(t =>
+            var normalized = NormalizeTransactions(transactions);
+            var rows = normalized.Select(t =>
             {
                 var row = new ReportRow();
                 row["Date"] = t.TransactionDate;
@@ -95,7 +96,8 @@ namespace doc_bursa.Services
         // Експорт у формат Excel (XLSX) з використанням ClosedXML
         public async Task<bool> ExportToExcelAsync(IEnumerable<Transaction> transactions, string filePath)
         {
-            var rows = transactions.Select(t =>
+            var normalized = NormalizeTransactions(transactions);
+            var rows = normalized.Select(t =>
             {
                 var row = new ReportRow();
                 row["Date"] = t.TransactionDate;
@@ -328,6 +330,49 @@ namespace doc_bursa.Services
             var service = new CsvImportService(db, categorizationService, txService);
             await service.ImportFromCsvAsync(filePath, cancellationToken: cancellationToken);
             return new List<Transaction>(); 
+        }
+
+        private static List<Transaction> NormalizeTransactions(IEnumerable<Transaction> transactions)
+        {
+            var list = transactions.ToList();
+            foreach (var tx in list)
+            {
+                tx.Children.Clear();
+            }
+
+            var map = list.ToDictionary(t => t.TransactionId, StringComparer.OrdinalIgnoreCase);
+            foreach (var tx in list.Where(t => !string.IsNullOrWhiteSpace(t.ParentTransactionId)))
+            {
+                if (map.TryGetValue(tx.ParentTransactionId, out var parent))
+                {
+                    parent.Children.Add(tx);
+                }
+            }
+
+            var roots = list.Where(t => string.IsNullOrWhiteSpace(t.ParentTransactionId)).ToList();
+            var normalized = new List<Transaction>();
+
+            void Collect(Transaction tx)
+            {
+                if (tx.IsSplit && tx.Children.Any())
+                {
+                    foreach (var child in tx.Children)
+                    {
+                        Collect(child);
+                    }
+                }
+                else
+                {
+                    normalized.Add(tx);
+                }
+            }
+
+            foreach (var root in roots)
+            {
+                Collect(root);
+            }
+
+            return normalized;
         }
     }
 }
