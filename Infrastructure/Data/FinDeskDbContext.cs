@@ -25,6 +25,9 @@ namespace doc_bursa.Infrastructure.Data
         public DbSet<AccountGroup> AccountGroups => Set<AccountGroup>();
         public DbSet<MasterGroup> MasterGroups => Set<MasterGroup>();
         public DbSet<MasterGroupAccountGroup> MasterGroupAccountGroups => Set<MasterGroupAccountGroup>();
+        public DbSet<ReconciliationRule> ReconciliationRules => Set<ReconciliationRule>();
+        public DbSet<PlannedTransaction> PlannedTransactions => Set<PlannedTransaction>();
+        public DbSet<DataSource> DataSources => Set<DataSource>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -110,6 +113,10 @@ namespace doc_bursa.Infrastructure.Data
                 .HasMaxLength(128);
 
             modelBuilder.Entity<Transaction>()
+                .Property(t => t.Status)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<Transaction>()
                 .HasIndex(t => t.TransactionId)
                 .IsUnique();
 
@@ -133,6 +140,10 @@ namespace doc_bursa.Infrastructure.Data
                 .HasOne(mg => mg.AccountGroup)
                 .WithMany(g => g.MasterGroupLinks)
                 .HasForeignKey(mg => mg.AccountGroupId);
+
+            modelBuilder.Entity<PlannedTransaction>()
+                .Property(p => p.Status)
+                .HasConversion<string>();
 
             base.OnModelCreating(modelBuilder);
         }

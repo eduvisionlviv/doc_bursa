@@ -1,167 +1,207 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using doc_bursa.Models;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
 
 namespace doc_bursa.Services
 {
     /// <summary>
-    /// Управління бюджетами та сповіщеннями.
+    /// Сервіс для модуля Бюджетування та Планування.
+    /// Реалізує календар платежів, Plan/Fact механізм, розрахунок Вільних коштів.
     /// </summary>
     public class BudgetService
     {
         private readonly DatabaseService _databaseService;
-        private readonly TransactionService _transactionService;
-        private readonly CategorizationService _categorizationService;
-        private readonly BudgetAnalyzer _analyzer;
+        private readonly ILogger _logger;
 
-        public BudgetService(DatabaseService databaseService, TransactionService transactionService, CategorizationService categorizationService)
+        public BudgetService(DatabaseService databaseService)
         {
             _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
-            _transactionService = transactionService ?? throw new ArgumentNullException(nameof(transactionService));
-            _categorizationService = categorizationService ?? throw new ArgumentNullException(nameof(categorizationService));
-            _analyzer = new BudgetAnalyzer(_transactionService, _categorizationService);
+            _logger = Log.ForContext<BudgetService>();
         }
 
-        public IReadOnlyCollection<Budget> GetBudgets()
+        /// <summary>
+        /// Створити планову транзакцію.
+        /// </summary>
+        public async Task<PlannedTransaction> CreatePlannedTransactionAsync(
+            PlannedTransaction planned,
+            CancellationToken ct = default)
         {
-            return _databaseService.GetBudgets();
+            await using var context = _databaseService.CreateDbContext();
+            context.PlannedTransactions.Add(planned);
+            await context.SaveChangesAsync(ct);
+            _logger.Information("Created planned transaction: {Name} on {Date}", planned.Name, planned.PlannedDate);
+            return planned;
         }
 
-        public Budget? GetBudget(Guid id)
+        /// <summary>
+        /// Отримати планові транзакції за період.
+        /// </summary>
+        public async Task<List<PlannedTransaction>> GetPlannedTransactionsAsync(
+            DateTime from,
+            DateTime to,
+            int? accountId = null,
+            CancellationToken ct = default)
         {
-            return _databaseService.GetBudget(id);
-        }
+            await using var context = _databaseService.CreateDbContext();
+            var query = context.PlannedTransactions
+                .Where(p => p.PlannedDate >= from && p.PlannedDate <= to);
 
-        public Budget CreateBudget(Budget budget)
-        {
-            if (budget.Id == Guid.Empty)
+            if (accountId.HasValue)
             {
-                budget.Id = Guid.NewGuid();
+                query = query.Where(p => p.AccountId == accountId.Value);
             }
 
-            budget.CreatedAt = DateTime.UtcNow;
-            budget.UpdatedAt = DateTime.UtcNow;
-            budget.StartDate = budget.StartDate == default ? DateTime.UtcNow.Date : budget.StartDate.Date;
-            _databaseService.SaveBudget(budget);
-            return budget;
+            return await query.OrderBy(p => p.PlannedDate).ToListAsync(ct);
         }
 
-        public bool UpdateBudget(Budget budget)
+        /// <summary>
+        /// Генерація планових транзакцій з шаблонів регулярних платежів.
+        /// </summary>
+        public async Task GeneratePlannedTransactionsFromTemplatesAsync(
+            DateTime from,
+            DateTime to,
+            CancellationToken ct = default)
         {
-            if (_databaseService.GetBudget(budget.Id) == null)
+            await using var context = _databaseService.CreateDbContext();
+            var templates = await context.RecurringTransactions
+                .Where(r => r.IsActive && r.NextDueDate >= from && r.NextDueDate <= to)
+                .ToListAsync(ct);
+
+            foreach (var template in templates)
             {
-                return false;
-            }
+                // Перевіряємо, чи вже існує планова транзакція з цього шаблону
+                var exists = await context.PlannedTransactions
+                    .AnyAsync(p =>
+                        p.RecurringTransactionId == template.Id &&
+                        p.PlannedDate.Date == template.NextDueDate.Date,
+                        ct);
 
-            budget.UpdatedAt = DateTime.UtcNow;
-            _databaseService.SaveBudget(budget);
-            return true;
-        }
-
-        public bool DeleteBudget(Guid id)
-        {
-            if (_databaseService.GetBudget(id) == null)
-            {
-                return false;
-            }
-
-            _databaseService.DeleteBudget(id);
-            return true;
-        }
-
-        public BudgetAnalysisResult EvaluateBudget(Guid id, DateTime? from = null, DateTime? to = null, DateTime? referenceDate = null)
-        {
-            var budget = _databaseService.GetBudget(id);
-            if (budget == null)
-            {
-                throw new InvalidOperationException("Бюджет не знайдено");
-            }
-
-            return EvaluateBudget(budget, from, to, referenceDate);
-        }
-
-        public BudgetAnalysisResult EvaluateBudget(Budget budget, DateTime? from = null, DateTime? to = null, DateTime? referenceDate = null)
-        {
-            var result = _analyzer.AnalyzeBudget(budget, from, to, referenceDate);
-            budget.Spent = result.ActualSpent;
-            budget.UpdatedAt = DateTime.UtcNow;
-            _databaseService.SaveBudget(budget);
-            return result;
-        }
-
-        public IReadOnlyDictionary<Guid, BudgetAnalysisResult> EvaluateAllBudgets(DateTime? from = null, DateTime? to = null, DateTime? referenceDate = null)
-        {
-            var results = new Dictionary<Guid, BudgetAnalysisResult>();
-            var budgets = _databaseService.GetBudgets().Where(b => b.IsActive).ToList();
-
-            foreach (var budget in budgets)
-            {
-                var analysis = EvaluateBudget(budget, from, to, referenceDate);
-                results[budget.Id] = analysis;
-            }
-
-            return results;
-        }
-
-        public IReadOnlyList<BudgetAlert> GetAlerts(DateTime? from = null, DateTime? to = null, DateTime? referenceDate = null)
-        {
-            var alerts = new List<BudgetAlert>();
-            var budgets = _databaseService.GetBudgets().Where(b => b.IsActive);
-
-            foreach (var budget in budgets)
-            {
-                var analysis = EvaluateBudget(budget, from, to, referenceDate);
-                if (analysis.ShouldAlert || analysis.IsOverBudget)
+                if (!exists)
                 {
-                    alerts.Add(new BudgetAlert
+                    var planned = new PlannedTransaction
                     {
-                        BudgetId = budget.Id,
-                        BudgetName = budget.Name,
-                        Category = budget.Category,
-                        UsagePercentage = analysis.UsagePercentage,
-                        Limit = budget.Limit,
-                        Spent = analysis.ActualSpent,
-                        IsOverBudget = analysis.IsOverBudget,
-                        Message = analysis.IsOverBudget
-                            ? "Перевищено ліміт бюджету"
-                            : $"Досягнуто {analysis.UsagePercentage}% ліміту"
-                    });
+                        Name = template.Description,
+                        Description = template.Notes,
+                        PlannedDate = template.NextDueDate,
+                        Amount = template.Amount,
+                        Category = template.Category,
+                        AccountId = template.AccountId,
+                        RecurringTransactionId = template.Id,
+                        IsRecurring = true,
+                        Status = PlannedTransactionStatus.Pending
+                    };
+
+                    context.PlannedTransactions.Add(planned);
+                    _logger.Information(
+                        "Generated planned transaction from template: {Description} on {Date}",
+                        template.Description, template.NextDueDate);
                 }
             }
 
-            return alerts;
+            await context.SaveChangesAsync(ct);
         }
 
-        public bool AddTransactionWithBudgeting(Transaction transaction)
+        /// <summary>
+        /// Позначити планову транзакцію як виконану (поглинуту реальною).
+        /// </summary>
+        public async Task MarkPlannedAsCompletedAsync(
+            int plannedId,
+            int actualTransactionId,
+            CancellationToken ct = default)
         {
-            if (transaction == null)
+            await using var context = _databaseService.CreateDbContext();
+            var planned = await context.PlannedTransactions.FindAsync(new object[] { plannedId }, ct);
+
+            if (planned != null)
             {
-                throw new ArgumentNullException(nameof(transaction));
+                planned.Status = PlannedTransactionStatus.Completed;
+                planned.ActualTransactionId = actualTransactionId;
+                await context.SaveChangesAsync(ct);
+                _logger.Information(
+                    "Marked planned transaction {PlannedId} as completed by actual {ActualId}",
+                    plannedId, actualTransactionId);
+            }
+        }
+
+        /// <summary>
+        /// Розрахунок Вільних коштів (Free Cash).
+        /// Формула: Поточний Баланс - Сума Планових Витрат (до кінця періоду).
+        /// </summary>
+        public async Task<decimal> CalculateFreeCashAsync(
+            int accountId,
+            DateTime periodEnd,
+            CancellationToken ct = default)
+        {
+            await using var context = _databaseService.CreateDbContext();
+
+            // Поточний баланс рахунку
+            var account = await context.Accounts.FindAsync(new object[] { accountId }, ct);
+            if (account == null)
+            {
+                return 0m;
             }
 
-            if (string.IsNullOrWhiteSpace(transaction.Category))
+            var currentBalance = account.Balance;
+
+            // Сума планових витрат до periodEnd
+            var plannedExpenses = await context.PlannedTransactions
+                .Where(p =>
+                    p.AccountId == accountId &&
+                    p.Status == PlannedTransactionStatus.Pending &&
+                    p.PlannedDate <= periodEnd &&
+                    p.Amount < 0) // Тільки витрати
+                .SumAsync(p => p.Amount, ct);
+
+            var freeCash = currentBalance + plannedExpenses; // plannedExpenses вже негативне
+
+            _logger.Debug(
+                "Free cash for account {AccountId}: Balance={Balance}, Planned={Planned}, Free={Free}",
+                accountId, currentBalance, plannedExpenses, freeCash);
+
+            return freeCash;
+        }
+
+        /// <summary>
+        /// Автоматичне поглинання планових транзакцій реальними.
+        /// Викликається після імпорту нових транзакцій.
+        /// </summary>
+        public async Task AutoMatchPlannedTransactionsAsync(
+            Transaction actual,
+            CancellationToken ct = default)
+        {
+            await using var context = _databaseService.CreateDbContext();
+
+            var searchFrom = actual.Date.AddDays(-3);
+            var searchTo = actual.Date.AddDays(3);
+
+            var candidates = await context.PlannedTransactions
+                .Where(p =>
+                    p.AccountId == actual.AccountId &&
+                    p.Status == PlannedTransactionStatus.Pending &&
+                    p.PlannedDate >= searchFrom &&
+                    p.PlannedDate <= searchTo)
+                .ToListAsync(ct);
+
+            foreach (var candidate in candidates)
             {
-                transaction.Category = _categorizationService.CategorizeTransaction(transaction);
+                // Проста евристика: перевіряємо суму та категорію
+                var amountMatch = Math.Abs(candidate.Amount - actual.Amount) < 0.01m;
+                var categoryMatch = candidate.Category.Equals(actual.Category, StringComparison.OrdinalIgnoreCase);
+
+                if (amountMatch && categoryMatch)
+                {
+                    await MarkPlannedAsCompletedAsync(candidate.Id, actual.Id, ct);
+                    _logger.Information(
+                        "Auto-matched planned transaction {PlannedId} with actual {ActualId}",
+                        candidate.Id, actual.Id);
+                    break; // Одна реальна може поглинути тільки одну планову
+                }
             }
-
-            var added = _transactionService.AddTransaction(transaction);
-            if (!added)
-            {
-                return false;
-            }
-
-            var relatedBudgets = _databaseService.GetBudgets()
-                .Where(b => b.IsActive && string.Equals(b.Category, transaction.Category, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-
-            foreach (var budget in relatedBudgets)
-            {
-                EvaluateBudget(budget);
-            }
-
-            return true;
         }
     }
 }
-
