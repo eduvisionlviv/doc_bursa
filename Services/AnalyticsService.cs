@@ -452,10 +452,36 @@ namespace doc_bursa.Services
         public decimal TransactionGrowth { get; set; }
     }
 
-            public decimal GetPlannedExpenseTotal(DateTime from, DateTime to)
+                    public decimal GetPlannedExpenseTotal(DateTime from, DateTime to)
         {
-            // Return 0 for now as this is a placeholder
-            return 0m;
+            // 1. Беремо тільки АКТИВНІ регулярні платежі
+            var rules = _databaseService.GetRecurringTransactions(onlyActive: true);
+            
+            if (!rules.Any()) return 0m;
+
+            // 2. Отримуємо вже здійснені транзакції за цей період
+            // Це потрібно, щоб система зрозуміла: "Оренда за цей місяць ВЖЕ сплачена", і не рахувала її в план
+            var actualTransactions = _databaseService.GetTransactions(from, to);
+
+            // 3. Генеруємо план (використовуємо існуючий Planner)
+            // Важливо: StartDate для планування = Зараз (DateTime.Now), щоб не планувати минуле
+            var projectionStart = DateTime.Now > from ? DateTime.Now : from;
+            
+            var plannedItems = RecurringTransactionPlanner.Generate(
+                rules, 
+                actualTransactions, 
+                projectionStart, 
+                to
+            );
+
+            // 4. Сумуємо тільки витрати, які ще НЕ були поглинуті
+            // RecurringTransactionPlanner вже має логіку IsAbsorbed/IsPlanned
+            var futureExpenses = plannedItems
+                .Where(p => !p.IsPlanned && p.IsActive) // Тільки майбутні активні
+                .Where(p => p.Amount < 0) // Тільки витрати
+                .Sum(p => Math.Abs(p.Amount));
+
+            return futureExpenses;
         }
     public enum TrendGranularity
     {
