@@ -5,6 +5,21 @@ using System.ComponentModel.DataAnnotations;
 namespace doc_bursa.Models
 {
     /// <summary>
+    /// Статус транзакції-переказу між власними рахунками.
+    /// </summary>
+    public enum TransactionStatus
+    {
+        /// <summary>Звичайна транзакція</summary>
+        Normal,
+        /// <summary>Переказ в процесі (пара не знайдена)</summary>
+        InTransit,
+        /// <summary>Переказ завершено (пара знайдена)</summary>
+        Completed,
+        /// <summary>Очікує обробки</summary>
+        Pending
+    }
+
+    /// <summary>
     /// Фінансова транзакція у системі.
     /// </summary>
     public class Transaction
@@ -15,6 +30,13 @@ namespace doc_bursa.Models
         [Required]
         [MaxLength(128)]
         public string TransactionId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Ідентифікатор парної транзакції для переказів між власними рахунками.
+        /// Зв'язує дві транзакції: витрату на одному рахунку та надходження на іншому.
+        /// </summary>
+        [MaxLength(128)]
+        public string? TransferId { get; set; }
 
         /// <summary>
         /// Дата транзакції в базовій моделі.
@@ -91,7 +113,7 @@ namespace doc_bursa.Models
         /// <summary>
         /// Статус переказу між власними рахунками.
         /// </summary>
-        public string? TransferStatus { get; set; }
+        public TransactionStatus Status { get; set; } = TransactionStatus.Normal;
 
         /// <summary>
         /// Комісія за переказ між власними рахунками.

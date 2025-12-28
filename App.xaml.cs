@@ -17,6 +17,7 @@ namespace doc_bursa
         {
             base.OnStartup(e);
 
+            // Ініціалізуємо AppDataPath СПОЧАТКУ
             AppDataPath = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
                 "doc_bursa"
@@ -27,17 +28,32 @@ namespace doc_bursa
                 Directory.CreateDirectory(AppDataPath);
             }
 
+            // Потім налаштовуємо логування
             ConfigureLogging();
             Log.Information("doc_bursa application starting.");
 
-            // Запуск фонової дедуплікації
-            var db = new DatabaseService();
-            var dedup = new DeduplicationService(db);
-            var categorization = new CategorizationService(db);
-            var txService = new TransactionService(db, dedup, categorization);
-            _deduplicationBackgroundTask = new DeduplicationBackgroundTask(txService);
-            _syncEngineService = new SyncEngineService(db, txService);
-            _syncEngineService.Start();
+            try
+            {
+                // Запуск фонової дедуплікації
+                var db = new DatabaseService();
+                var dedup = new DeduplicationService(db);
+                var categorization = new CategorizationService(db);
+                var txService = new TransactionService(db, dedup, categorization);
+                _deduplicationBackgroundTask = new DeduplicationBackgroundTask(txService);
+                _syncEngineService = new SyncEngineService(db, txService);
+                _syncEngineService.Start();
+                
+                Log.Information("Background services started successfully");
+            }
+            catch (Exception ex)
+            {
+                Log.Error(ex, "Failed to start background services");
+                MessageBox.Show(
+                    $"Помилка запуску програми: {ex.Message}\n\nДеталі записано в лог-файл.",
+                    "Помилка",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Error);
+            }
         }
 
         protected override void OnExit(ExitEventArgs e)

@@ -1,118 +1,187 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using doc_bursa.Models;
+using Microsoft.EntityFrameworkCore;
+using Serilog;
 
 namespace doc_bursa.Services
 {
     /// <summary>
-    /// Сервіс для звірки внутрішніх переказів між рахунками.
+    /// Сервіс для звірки та зв'язування переказів між власними рахунками.
+    /// Реалізує модуль "Транзит та Звірка" з документації.
     /// </summary>
     public class ReconciliationService
     {
-        private const int DateWindowDays = 2;
         private readonly DatabaseService _databaseService;
+        private readonly ILogger _logger;
 
         public ReconciliationService(DatabaseService databaseService)
         {
             _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
+            _logger = Log.ForContext<ReconciliationService>();
         }
 
         /// <summary>
-        /// Пошук пар списання/зарахування за правилами вікна ±2 дні.
+        /// Отримати всі активні правила звірки.
         /// </summary>
-        public List<TransferMatch> ReconcileTransfers()
+        public async Task<List<ReconciliationRule>> GetActiveRulesAsync(CancellationToken ct = default)
         {
-            var rules = _databaseService.GetTransferRules(onlyActive: true);
-            var allTransactions = _databaseService.GetTransactions();
-            var existingMatches = _databaseService.GetTransferMatches();
-            var results = new List<TransferMatch>();
+            await using var context = _databaseService.CreateDbContext();
+            return await context.ReconciliationRules
+                .Where(r => r.IsActive)
+                .ToListAsync(ct);
+        }
 
-            foreach (var outgoing in allTransactions.Where(t => t.Amount < 0))
+        /// <summary>
+        /// Створити нове правило звірки.
+        /// </summary>
+        public async Task<ReconciliationRule> CreateRuleAsync(ReconciliationRule rule, CancellationToken ct = default)
+        {
+            await using var context = _databaseService.CreateDbContext();
+            context.ReconciliationRules.Add(rule);
+            await context.SaveChangesAsync(ct);
+            _logger.Information("Created reconciliation rule: {RuleName}", rule.Name);
+            return rule;
+        }
+
+        /// <summary>
+        /// Спробувати знайти парну транзакцію для переказу.
+        /// </summary>
+        public async Task<Transaction?> FindMatchingTransferAsync(
+            Transaction sourceTransaction,
+            ReconciliationRule rule,
+            CancellationToken ct = default)
+        {
+            if (sourceTransaction.Amount >= 0)
             {
-                var rule = rules.FirstOrDefault(r => r.Matches(outgoing));
-                if (rule == null)
+                return null; // Шукаємо пару тільки для витрат
+            }
+
+            await using var context = _databaseService.CreateDbContext();
+
+            var searchFrom = sourceTransaction.Date.AddDays(-rule.MaxDaysDifference);
+            var searchTo = sourceTransaction.Date.AddDays(rule.MaxDaysDifference);
+            var expectedAmount = Math.Abs(sourceTransaction.Amount);
+
+            var candidates = await context.Transactions
+                .Where(t =>
+                    t.AccountId == rule.TargetAccountId &&
+                    t.Date >= searchFrom &&
+                    t.Date <= searchTo &&
+                    t.Amount > 0 && // Дохід
+                    string.IsNullOrEmpty(t.TransferId)) // Ще не зв'язана
+                .ToListAsync(ct);
+
+            foreach (var candidate in candidates)
+            {
+                var difference = Math.Abs(candidate.Amount - expectedAmount);
+                var commissionPercent = (difference / expectedAmount) * 100;
+
+                if (commissionPercent <= rule.MaxCommissionPercent)
+                {
+                    return candidate;
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Зв'язати дві транзакції як переказ.
+        /// </summary>
+        public async Task LinkTransferAsync(
+            Transaction source,
+            Transaction target,
+            decimal? commission = null,
+            CancellationToken ct = default)
+        {
+            var transferId = Guid.NewGuid().ToString();
+
+            await using var context = _databaseService.CreateDbContext();
+
+            var sourceDb = await context.Transactions.FindAsync(new object[] { source.Id }, ct);
+            var targetDb = await context.Transactions.FindAsync(new object[] { target.Id }, ct);
+
+            if (sourceDb == null || targetDb == null)
+            {
+                throw new InvalidOperationException("Транзакції не знайдено в базі даних");
+            }
+
+            sourceDb.TransferId = transferId;
+            sourceDb.Status = TransactionStatus.Completed;
+            sourceDb.IsTransfer = true;
+            sourceDb.TransferCommission = commission;
+
+            targetDb.TransferId = transferId;
+            targetDb.Status = TransactionStatus.Completed;
+            targetDb.IsTransfer = true;
+
+            await context.SaveChangesAsync(ct);
+
+            _logger.Information(
+                "Linked transfer: {SourceId} -> {TargetId}, TransferId: {TransferId}, Commission: {Commission}",
+                source.TransactionId, target.TransactionId, transferId, commission);
+        }
+
+        /// <summary>
+        /// Автоматична обробка нової транзакції за правилами.
+        /// </summary>
+        public async Task ProcessTransactionAsync(Transaction transaction, CancellationToken ct = default)
+        {
+            if (transaction.Amount >= 0 || transaction.IsTransfer)
+            {
+                return; // Обробляємо тільки витрати, які ще не позначені як переказ
+            }
+
+            var rules = await GetActiveRulesAsync(ct);
+
+            foreach (var rule in rules)
+            {
+                if (transaction.AccountId != rule.SourceAccountId)
                 {
                     continue;
                 }
 
-                var windowStart = outgoing.Date.AddDays(-DateWindowDays);
-                var windowEnd = outgoing.Date.AddDays(DateWindowDays);
-
-                var incomingCandidates = allTransactions
-                    .Where(t => t.Amount > 0
-                                && t.Source.Equals(rule.TargetSource, StringComparison.OrdinalIgnoreCase)
-                                && t.Date >= windowStart
-                                && t.Date <= windowEnd)
-                    .OrderBy(t => Math.Abs((t.Date - outgoing.Date).TotalDays))
-                    .ToList();
-
-                var existing = existingMatches.FirstOrDefault(m => m.OutgoingTransactionId == outgoing.TransactionId);
-
-                if (incomingCandidates.Any())
+                // Перевірка умов
+                if (!string.IsNullOrEmpty(rule.CounterpartyPattern) &&
+                    !transaction.Counterparty.Contains(rule.CounterpartyPattern, StringComparison.OrdinalIgnoreCase))
                 {
-                    var best = incomingCandidates
-                        .OrderBy(t => Math.Abs(Math.Abs(outgoing.Amount) - t.Amount))
-                        .First();
+                    continue;
+                }
 
-                    var commissionDelta = Math.Abs(outgoing.Amount) - best.Amount;
-                    var status = Math.Abs(commissionDelta) < 0.01m
-                        ? TransferMatchStatuses.Matched
-                        : TransferMatchStatuses.CommissionDelta;
+                var match = await FindMatchingTransferAsync(transaction, rule, ct);
 
-                    var match = existing ?? new TransferMatch
-                    {
-                        OutgoingTransactionId = outgoing.TransactionId,
-                        CreatedAt = DateTime.UtcNow
-                    };
+                if (match != null)
+                {
+                    var expectedAmount = Math.Abs(transaction.Amount);
+                    var actualAmount = match.Amount;
+                    var commission = expectedAmount - actualAmount;
 
-                    match.IncomingTransactionId = best.TransactionId;
-                    match.CommissionDelta = commissionDelta;
-                    match.Status = status;
-                    match.UpdatedAt = DateTime.UtcNow;
-
-                    _databaseService.SaveTransferMatch(match);
-                    _databaseService.UpdateTransactionTransferInfo(outgoing.Id, true, status, commissionDelta);
-                    _databaseService.UpdateTransactionTransferInfo(best.Id, true, status, commissionDelta);
-
-                    results.Add(match);
+                    await LinkTransferAsync(transaction, match, commission > 0 ? commission : null, ct);
+                    _logger.Information(
+                        "Auto-matched transfer by rule '{RuleName}': {SourceTx} -> {TargetTx}",
+                        rule.Name, transaction.TransactionId, match.TransactionId);
+                    return;
                 }
                 else
                 {
-                    var match = existing ?? new TransferMatch
+                    // Пара не знайдена - встановлюємо статус "В дорозі"
+                    await using var context = _databaseService.CreateDbContext();
+                    var txDb = await context.Transactions.FindAsync(new object[] { transaction.Id }, ct);
+                    if (txDb != null)
                     {
-                        OutgoingTransactionId = outgoing.TransactionId,
-                        Status = TransferMatchStatuses.InTransit,
-                        CreatedAt = DateTime.UtcNow
-                    };
-
-                    match.UpdatedAt = DateTime.UtcNow;
-                    if (string.IsNullOrEmpty(match.Status))
-                    {
-                        match.Status = TransferMatchStatuses.InTransit;
+                        txDb.Status = TransactionStatus.InTransit;
+                        txDb.IsTransfer = true;
+                        await context.SaveChangesAsync(ct);
+                        _logger.Information(
+                            "Transaction marked as InTransit: {TxId}",
+                            transaction.TransactionId);
                     }
-
-                    _databaseService.SaveTransferMatch(match);
-                    _databaseService.UpdateTransactionTransferInfo(outgoing.Id, true, TransferMatchStatuses.InTransit, match.CommissionDelta);
-                    results.Add(match);
                 }
             }
-
-            return results;
-        }
-
-        public void UpdateTransferStatus(Transaction transaction, string status, decimal commission)
-        {
-            if (transaction == null)
-            {
-                throw new ArgumentNullException(nameof(transaction));
-            }
-
-            transaction.IsTransfer = true;
-            transaction.TransferStatus = status;
-            transaction.TransferCommission = commission;
-
-            _databaseService.UpdateTransactionTransferInfo(transaction.Id, true, status, commission);
         }
     }
 }
