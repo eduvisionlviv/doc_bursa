@@ -16,6 +16,7 @@ namespace doc_bursa.ViewModels
     public partial class DashboardViewModel : ObservableObject
     {
         private readonly DatabaseService _db;
+        private readonly AnalyticsService _analyticsService;
 
         [ObservableProperty]
         private decimal totalIncome;
@@ -135,6 +136,8 @@ namespace doc_bursa.ViewModels
             TotalIncome = operationalTransactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
             TotalExpenses = Math.Abs(operationalTransactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
             Balance = TotalIncome - TotalExpenses;
+            PlannedExpenses = _analyticsService.GetPlannedExpenseTotal(from, to);
+            FreeCash = Balance - PlannedExpenses;
 
             Categories = operationalTransactions
                 .Where(t => t.Amount < 0)

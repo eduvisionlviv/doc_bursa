@@ -137,7 +137,9 @@ namespace doc_bursa.Services
                     ReminderDays INTEGER,
                     Notes TEXT,
                     CreatedAt TEXT NOT NULL,
-                    UpdatedAt TEXT
+                    UpdatedAt TEXT,
+                    IsPlanned INTEGER DEFAULT 0,
+                    LinkedTransactionId TEXT
                 );
             ";
             command.ExecuteNonQuery();
@@ -257,11 +259,43 @@ namespace doc_bursa.Services
                     ReminderDays INTEGER,
                     Notes TEXT,
                     CreatedAt TEXT NOT NULL,
-                    UpdatedAt TEXT
+                    UpdatedAt TEXT,
+                    IsPlanned INTEGER DEFAULT 0,
+                    LinkedTransactionId TEXT
                 );
             ";
 
             command.ExecuteNonQuery();
+            EnsureRecurringTransactionColumns(connection);
+        }
+
+        private static void EnsureRecurringTransactionColumns(SqliteConnection connection)
+        {
+            var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var pragma = connection.CreateCommand();
+            pragma.CommandText = "PRAGMA table_info(RecurringTransactions)";
+            using (var reader = pragma.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    existingColumns.Add(reader.GetString(1));
+                }
+            }
+
+            void AddColumnIfMissing(string columnName, string definition)
+            {
+                if (existingColumns.Contains(columnName))
+                {
+                    return;
+                }
+
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = $"ALTER TABLE RecurringTransactions ADD COLUMN {columnName} {definition}";
+                alterCommand.ExecuteNonQuery();
+            }
+
+            AddColumnIfMissing("IsPlanned", "INTEGER DEFAULT 0");
+            AddColumnIfMissing("LinkedTransactionId", "TEXT");
         }
 
         // Transactions
@@ -705,8 +739,8 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO RecurringTransactions
-                (Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt)
-                VALUES ($id, $desc, $amount, $cat, $accountId, $freq, $interval, $start, $end, $next, $last, $count, $active, $auto, $reminder, $notes, $created, $updated)";
+                (Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt, IsPlanned, LinkedTransactionId)
+                VALUES ($id, $desc, $amount, $cat, $accountId, $freq, $interval, $start, $end, $next, $last, $count, $active, $auto, $reminder, $notes, $created, $updated, $isPlanned, $linkedTx)";
 
             command.Parameters.AddWithValue("$id", recurring.Id.ToString());
             command.Parameters.AddWithValue("$desc", recurring.Description);
@@ -726,6 +760,8 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$notes", recurring.Notes ?? string.Empty);
             command.Parameters.AddWithValue("$created", recurring.CreatedAt.ToString("o"));
             command.Parameters.AddWithValue("$updated", recurring.UpdatedAt?.ToString("o") ?? string.Empty);
+            command.Parameters.AddWithValue("$isPlanned", recurring.IsPlanned ? 1 : 0);
+            command.Parameters.AddWithValue("$linkedTx", recurring.LinkedTransactionId ?? string.Empty);
 
             command.ExecuteNonQuery();
         }
@@ -736,7 +772,7 @@ namespace doc_bursa.Services
             connection.Open();
 
             var command = connection.CreateCommand();
-            command.CommandText = @"SELECT Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt 
+            command.CommandText = @"SELECT Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt, IsPlanned, LinkedTransactionId 
                                     FROM RecurringTransactions" + (onlyActive ? " WHERE IsActive = 1" : string.Empty);
 
             var result = new List<RecurringTransaction>();
@@ -762,7 +798,9 @@ namespace doc_bursa.Services
                     ReminderDays = reader.GetInt32(14),
                     Notes = reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
                     CreatedAt = DateTime.Parse(reader.GetString(16)),
-                    UpdatedAt = reader.IsDBNull(17) || string.IsNullOrWhiteSpace(reader.GetString(17)) ? null : DateTime.Parse(reader.GetString(17))
+                    UpdatedAt = reader.IsDBNull(17) || string.IsNullOrWhiteSpace(reader.GetString(17)) ? null : DateTime.Parse(reader.GetString(17)),
+                    IsPlanned = !reader.IsDBNull(18) && reader.GetInt32(18) == 1,
+                    LinkedTransactionId = reader.IsDBNull(19) ? string.Empty : reader.GetString(19)
                 };
 
                 result.Add(recurring);
@@ -777,7 +815,7 @@ namespace doc_bursa.Services
             connection.Open();
 
             var command = connection.CreateCommand();
-            command.CommandText = @"SELECT Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt 
+            command.CommandText = @"SELECT Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt, IsPlanned, LinkedTransactionId 
                                     FROM RecurringTransactions WHERE Id = $id LIMIT 1";
             command.Parameters.AddWithValue("$id", id.ToString());
 
@@ -806,7 +844,9 @@ namespace doc_bursa.Services
                 ReminderDays = reader.GetInt32(14),
                 Notes = reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
                 CreatedAt = DateTime.Parse(reader.GetString(16)),
-                UpdatedAt = reader.IsDBNull(17) || string.IsNullOrWhiteSpace(reader.GetString(17)) ? null : DateTime.Parse(reader.GetString(17))
+                UpdatedAt = reader.IsDBNull(17) || string.IsNullOrWhiteSpace(reader.GetString(17)) ? null : DateTime.Parse(reader.GetString(17)),
+                IsPlanned = !reader.IsDBNull(18) && reader.GetInt32(18) == 1,
+                LinkedTransactionId = reader.IsDBNull(19) ? string.Empty : reader.GetString(19)
             };
         }
 
