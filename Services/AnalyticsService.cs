@@ -33,7 +33,7 @@ namespace doc_bursa.Services
                 return cachedStats;
             }
 
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
 
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
@@ -80,7 +80,7 @@ namespace doc_bursa.Services
 
             foreach (var accountNumber in group.AccountNumbers)
             {
-                var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
+                var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
                 allTransactions.AddRange(transactions);
             }
 
@@ -119,7 +119,7 @@ namespace doc_bursa.Services
                 return cachedCategories;
             }
 
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
 
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
@@ -157,7 +157,7 @@ namespace doc_bursa.Services
                 return cachedMonthly;
             }
 
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId)
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber)
                 .Where(t => t.Date.Year == year)
                 .ToList();
 
@@ -193,7 +193,7 @@ namespace doc_bursa.Services
                 return cached;
             }
 
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
             if (from.HasValue)
                 transactions = transactions.Where(t => t.Date >= from.Value).ToList();
 
@@ -268,7 +268,7 @@ namespace doc_bursa.Services
                 return cached;
             }
 
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
             if (from.HasValue)
                 transactions = transactions.Where(t => t.Date >= from.Value).ToList();
 
@@ -351,7 +351,7 @@ namespace doc_bursa.Services
         /// </summary>
         public List<CounterpartyStatistics> GetTopCounterparties(string accountNumber, int topCount = 10, DateTime? startDate = null, DateTime? endDate = null, int? masterGroupId = null)
         {
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
 
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
