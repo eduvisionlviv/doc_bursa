@@ -122,6 +122,7 @@ namespace doc_bursa.ViewModels
         public DashboardViewModel(DatabaseService? databaseService = null)
         {
             _db = databaseService ?? new DatabaseService();
+            _analyticsService = new AnalyticsService(_db);
             LoadData();
         }
 
@@ -129,11 +130,11 @@ namespace doc_bursa.ViewModels
         private void LoadData()
         {
             var (from, to) = GetDateRange();
-            var accountFilter = SelectedMasterGroup?.AccountNumbers ?? Array.Empty<string>();
-            var transactions = _db.GetTransactions(from, to, accounts: accountFilter);
-                        var periodTransactions = transactions;
+            var accountFilter = SelectedMasterGroup?.AccountNumbers?.ToArray() ?? Array.Empty<string>();
+            var transactions = _db.GetTransactions(from ?? DateTime.MinValue, to ?? DateTime.MaxValue, accounts: accountFilter);
+            var periodTransactions = transactions.ToList();
 
-                                    // 1. Отримуємо контекст (рахунки обраної групи)
+            // 1. Отримуємо контекст (рахунки обраної групи)
             // Якщо SelectedMasterGroup == null, список буде порожній (Глобальний контекст)
             var contextAccountNumbers = SelectedMasterGroup != null 
                 ? new HashSet<string>(SelectedMasterGroup.AccountNumbers) 
@@ -141,16 +142,16 @@ namespace doc_bursa.ViewModels
 
             // 2. ЗАСТОСОВУЄМО НОВУ ЛОГІКУ: Effective Transactions
             // Це обробить перекази (покаже їх як витрати/доходи для групи, або приховає для глобального вигляду)
-            var effectiveTransactions = TransactionFilterHelper.GetEffectiveTransactions(transactions, contextAccountNumbers);
+            var effectiveTransactions = TransactionFilterHelper.GetEffectiveTransactions(periodTransactions, contextAccountNumbers);
 
             if (from.HasValue)
             {
-                periodTransactions = periodTransactions.Where(t => t.Date >= from.Value);
+                effectiveTransactions = effectiveTransactions.Where(t => t.Date >= from.Value).ToList();
             }
 
             if (to.HasValue)
             {
-                periodTransactions = periodTransactions.Where(t => t.Date <= to.Value);
+                effectiveTransactions = effectiveTransactions.Where(t => t.Date <= to.Value).ToList();
             }
 
             // 3. Додаткова фільтрація (прибрати "Очікує", "Планові" якщо вони потрапили в вибірку)
@@ -161,7 +162,7 @@ namespace doc_bursa.ViewModels
             TotalIncome = operationalTransactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
             TotalExpenses = Math.Abs(operationalTransactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
             Balance = TotalIncome - TotalExpenses;
-            PlannedExpenses = _analyticsService.GetPlannedExpenseTotal(from, to);
+            PlannedExpenses = _analyticsService.GetPlannedExpenseTotal(from ?? DateTime.MinValue, to ?? DateTime.MaxValue);
             FreeCash = Balance - PlannedExpenses;
 
             Categories = operationalTransactions
@@ -187,7 +188,7 @@ namespace doc_bursa.ViewModels
             BuildExpensesPieChart(operationalTransactions);
             BuildCashflowChart(operationalTransactions);
             BuildStructureChart(operationalTransactions);
-            var netWorthTransactions = TransactionFilterHelper.FilterOperationalTransactions(scopedTransactions, out _);
+            var netWorthTransactions = TransactionFilterHelper.FilterOperationalTransactions(effectiveTransactions, out _);
             BuildNetWorthChart(netWorthTransactions);
         }
 
