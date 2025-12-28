@@ -29,157 +29,151 @@ namespace doc_bursa.Services
         public async Task<List<ReconciliationRule>> GetActiveRulesAsync(CancellationToken ct = default)
         {
             await using var context = _databaseService.CreateDbContext();
-            return context.ReconciliationRules
-                .Where(r => r.IsActive)
-                .ToList();
-        }
-
-        /// <summary>
-        /// Створити нове правило звірки.
-        /// </summary>
-        public async Task<ReconciliationRule> CreateRuleAsync(ReconciliationRule rule, CancellationToken ct = default)
-        {
-            await using var context = _databaseService.CreateDbContext();
-            context.ReconciliationRules.Add(rule);
-            await context.SaveChangesAsync(ct);
-            _logger.Information("Created reconciliation rule: {RuleName}", rule.Name);
-            return rule;
-        }
-
-        /// <summary>
-        /// Спробувати знайти парну транзакцію для переказу.
-        /// </summary>
-        public async Task<Transaction?> FindMatchingTransferAsync(
-            Transaction sourceTransaction,
-            ReconciliationRule rule,
-            CancellationToken ct = default)
-        {
-            if (sourceTransaction.Amount >= 0)
+            var query = "SELECT * FROM ReconciliationRules WHERE IsActive = 1";
+            var table = _databaseService.ExecuteQuery(query);
+            
+            var rules = new List<ReconciliationRule>();
+            foreach (System.Data.DataRow row in table.Rows)
             {
-                return null; // Шукаємо пару тільки для витрат
-            }
-
-            await using var context = _databaseService.CreateDbContext();
-
-            var searchFrom = sourceTransaction.Date.AddDays(-rule.MaxDaysDifference);
-            var searchTo = sourceTransaction.Date.AddDays(rule.MaxDaysDifference);
-            var expectedAmount = Math.Abs(sourceTransaction.Amount);
-
-            var candidates = context.Transactions
-                .Where(t =>
-                    t.AccountId == rule.TargetAccountId &&
-                    t.Date >= searchFrom &&
-                    t.Date <= searchTo &&
-                    t.Amount > 0 && // Дохід
-                    string.IsNullOrEmpty(t.TransferId)) // Ще не зв'язана
-                .ToList();
-
-            foreach (var candidate in candidates)
-            {
-                var difference = Math.Abs(candidate.Amount - expectedAmount);
-                var commissionPercent = (difference / expectedAmount) * 100;
-
-                if (commissionPercent <= rule.MaxCommissionPercent)
+                rules.Add(new ReconciliationRule
                 {
-                    return candidate;
-                }
+                    Id = Convert.ToInt32(row["Id"]),
+                    SourceAccountId = Convert.ToInt32(row["SourceAccountId"]),
+                    TargetAccountId = Convert.ToInt32(row["TargetAccountId"]),
+                    ToleranceAmount = Convert.ToDecimal(row["ToleranceAmount"]),
+                    ToleranceHours = Convert.ToInt32(row["ToleranceHours"]),
+                    IsActive = Convert.ToBoolean(row["IsActive"])
+                });
             }
-
-            return null;
+            
+            return rules;
         }
 
         /// <summary>
-        /// Зв'язати дві транзакції як переказ.
+        /// Виконати звірку переказів згідно з активними правилами.
         /// </summary>
-        public async Task LinkTransferAsync(
-            Transaction source,
-            Transaction target,
-            decimal? commission = null,
-            CancellationToken ct = default)
+        public async Task<int> ReconcileTransfersAsync(CancellationToken ct = default)
         {
-            var transferId = Guid.NewGuid().ToString();
-
-            await using var context = _databaseService.CreateDbContext();
-
-            var sourceDb = context.Transactions.FirstOrDefault(t => t.Id == source.Id);
-            var targetDb = context.Transactions.FirstOrDefault(t => t.Id == target.Id);
-
-            if (sourceDb == null || targetDb == null)
-            {
-                throw new InvalidOperationException("Транзакції не знайдено в базі даних");
-            }
-
-            sourceDb.TransferId = transferId;
-            sourceDb.Status = TransactionStatus.Completed;
-            sourceDb.IsTransfer = true;
-            sourceDb.TransferCommission = commission;
-
-            targetDb.TransferId = transferId;
-            targetDb.Status = TransactionStatus.Completed;
-            targetDb.IsTransfer = true;
-
-            await context.SaveChangesAsync(ct);
-
-            _logger.Information(
-                "Linked transfer: {SourceId} -> {TargetId}, TransferId: {TransferId}, Commission: {Commission}",
-                source.TransactionId, target.TransactionId, transferId, commission);
-        }
-
-        /// <summary>
-        /// Автоматична обробка нової транзакції за правилами.
-        /// </summary>
-        public async Task ProcessTransactionAsync(Transaction transaction, CancellationToken ct = default)
-        {
-            if (transaction.Amount >= 0 || transaction.IsTransfer)
-            {
-                return; // Обробляємо тільки витрати, які ще не позначені як переказ
-            }
-
             var rules = await GetActiveRulesAsync(ct);
+            int reconciledCount = 0;
 
             foreach (var rule in rules)
             {
-                if (transaction.AccountId != rule.SourceAccountId)
-                {
-                    continue;
-                }
+                reconciledCount += await ReconcileByRuleAsync(rule, ct);
+            }
 
-                // Перевірка умов
-                if (!string.IsNullOrEmpty(rule.CounterpartyPattern) &&
-                    !transaction.Counterparty.Contains(rule.CounterpartyPattern, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
+            return reconciledCount;
+        }
 
-                var match = await FindMatchingTransferAsync(transaction, rule, ct);
+        private async Task<int> ReconcileByRuleAsync(ReconciliationRule rule, CancellationToken ct)
+        {
+            // Отримати непарні транзакції з вихідного рахунку
+            var outgoingQuery = $@"
+                SELECT * FROM Transactions 
+                WHERE AccountId = {rule.SourceAccountId} 
+                AND Amount < 0 
+                AND ReconciliationId IS NULL
+                ORDER BY Date";
+            
+            var outgoingTable = _databaseService.ExecuteQuery(outgoingQuery);
+            
+            // Отримати непарні транзакції з цільового рахунку
+            var incomingQuery = $@"
+                SELECT * FROM Transactions 
+                WHERE AccountId = {rule.TargetAccountId} 
+                AND Amount > 0 
+                AND ReconciliationId IS NULL
+                ORDER BY Date";
+            
+            var incomingTable = _databaseService.ExecuteQuery(incomingQuery);
+            
+            int reconciledCount = 0;
 
-                if (match != null)
-                {
-                    var expectedAmount = Math.Abs(transaction.Amount);
-                    var actualAmount = match.Amount;
-                    var commission = expectedAmount - actualAmount;
+            foreach (System.Data.DataRow outRow in outgoingTable.Rows)
+            {
+                var outAmount = Math.Abs(Convert.ToDecimal(outRow["Amount"]));
+                var outDate = Convert.ToDateTime(outRow["Date"]);
+                var outId = Convert.ToInt32(outRow["Id"]);
 
-                    await LinkTransferAsync(transaction, match, commission > 0 ? commission : null, ct);
-                    _logger.Information(
-                        "Auto-matched transfer by rule '{RuleName}': {SourceTx} -> {TargetTx}",
-                        rule.Name, transaction.TransactionId, match.TransactionId);
-                    return;
-                }
-                else
+                foreach (System.Data.DataRow inRow in incomingTable.Rows)
                 {
-                    // Пара не знайдена - встановлюємо статус "В дорозі"
-                    await using var context = _databaseService.CreateDbContext();
-                    var txDb = context.Transactions.FirstOrDefault(t => t.Id == transaction.Id);
-                    if (txDb != null)
+                    var inAmount = Convert.ToDecimal(inRow["Amount"]);
+                    var inDate = Convert.ToDateTime(inRow["Date"]);
+                    var inId = Convert.ToInt32(inRow["Id"]);
+
+                    // Перевірка умов звірки
+                    var amountDiff = Math.Abs(outAmount - inAmount);
+                    var timeDiff = Math.Abs((inDate - outDate).TotalHours);
+
+                    if (amountDiff <= rule.ToleranceAmount && timeDiff <= rule.ToleranceHours)
                     {
-                        txDb.Status = TransactionStatus.InTransit;
-                        txDb.IsTransfer = true;
-                        await context.SaveChangesAsync(ct);
-                        _logger.Information(
-                            "Transaction marked as InTransit: {TxId}",
-                            transaction.TransactionId);
+                        // Створити запис звірки
+                        var reconciliationId = await CreateReconciliationAsync(outId, inId, rule.Id);
+                        
+                        if (reconciliationId > 0)
+                        {
+                            reconciledCount++;
+                            break; // Перейти до наступної вихідної транзакції
+                        }
                     }
                 }
+            }
+
+            return reconciledCount;
+        }
+
+        private async Task<int> CreateReconciliationAsync(int outgoingTransactionId, int incomingTransactionId, int ruleId)
+        {
+            try
+            {
+                // Вставити запис у таблицю Reconciliations
+                var insertQuery = $@"
+                    INSERT INTO Reconciliations (OutgoingTransactionId, IncomingTransactionId, RuleId, ReconciliationDate, Status)
+                    VALUES ({outgoingTransactionId}, {incomingTransactionId}, {ruleId}, '{DateTime.Now:yyyy-MM-dd HH:mm:ss}', 'Matched');
+                    SELECT last_insert_rowid();";
+                
+                var result = _databaseService.ExecuteQuery(insertQuery);
+                var reconciliationId = Convert.ToInt32(result.Rows[0][0]);
+
+                // Оновити транзакції
+                var updateOut = $"UPDATE Transactions SET ReconciliationId = {reconciliationId} WHERE Id = {outgoingTransactionId}";
+                var updateIn = $"UPDATE Transactions SET ReconciliationId = {reconciliationId} WHERE Id = {incomingTransactionId}";
+                
+                _databaseService.ExecuteNonQuery(updateOut);
+                _databaseService.ExecuteNonQuery(updateIn);
+
+                _logger.Information($"Звірено транзакції {outgoingTransactionId} та {incomingTransactionId}");
+                return reconciliationId;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Помилка при створенні звірки для транзакцій {outgoingTransactionId} та {incomingTransactionId}");
+                return 0;
+            }
+        }
+
+        /// <summary>
+        /// Скасувати звірку (розв'язати транзакції).
+        /// </summary>
+        public async Task<bool> UnreconcileAsync(int reconciliationId, CancellationToken ct = default)
+        {
+            try
+            {
+                // Видалити ReconciliationId з транзакцій
+                var updateQuery = $"UPDATE Transactions SET ReconciliationId = NULL WHERE ReconciliationId = {reconciliationId}";
+                _databaseService.ExecuteNonQuery(updateQuery);
+
+                // Видалити запис звірки
+                var deleteQuery = $"DELETE FROM Reconciliations WHERE Id = {reconciliationId}";
+                _databaseService.ExecuteNonQuery(deleteQuery);
+
+                _logger.Information($"Скасовано звірку {reconciliationId}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, $"Помилка при скасуванні звірки {reconciliationId}");
+                return false;
             }
         }
     }
