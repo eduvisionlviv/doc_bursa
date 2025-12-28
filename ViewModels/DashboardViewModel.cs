@@ -27,6 +27,18 @@ namespace doc_bursa.ViewModels
         [ObservableProperty]
         private decimal balance;
 
+                [ObservableProperty]
+        private decimal _netWorth;
+
+        [ObservableProperty]
+        private decimal _freeCash;
+
+        [ObservableProperty]
+        private decimal _plannedExpenses;
+
+        [ObservableProperty]
+        private decimal _inTransitTransfers;
+
         [ObservableProperty]
         private List<Category> categories = new();
 
