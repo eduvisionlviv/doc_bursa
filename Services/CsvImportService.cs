@@ -350,7 +350,7 @@ namespace doc_bursa.Services
                 return false;
             }
 
-            if (!decimal.TryParse(mapped.Amount, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount))
+            if (!NormalizationHelper.TryNormalizeAmount(mapped.Amount, mapped.Currency, out var amount, out var currency))
             {
                 error = $"Неправильна сума: {mapped.Amount}";
                 return false;
@@ -363,12 +363,16 @@ namespace doc_bursa.Services
                 ? _defaultAccountName
                 : mapped.Account;
             transaction.Balance = mapped.Balance ?? 0m;
-            transaction.Source = mapped.Source ?? format.ToString();
-            transaction.Category = !string.IsNullOrWhiteSpace(mapped.Category)
-                ? mapped.Category
-                : _categorization.CategorizeTransaction(transaction);
+            transaction.Source = string.IsNullOrWhiteSpace(mapped.Source) ? format.ToString() : mapped.Source;
+            transaction.Category = mapped.Category ?? string.Empty;
             transaction.TransactionId = mapped.TransactionId ?? $"{transaction.Source}-{transaction.Date:yyyyMMdd}-{Math.Abs(transaction.Description.GetHashCode())}";
             transaction.Hash = mapped.Hash ?? string.Empty;
+
+            NormalizationHelper.NormalizeTransaction(transaction, currency);
+            if (string.IsNullOrWhiteSpace(transaction.Category))
+            {
+                transaction.Category = _categorization.CategorizeTransaction(transaction);
+            }
 
             error = string.Empty;
             return true;
