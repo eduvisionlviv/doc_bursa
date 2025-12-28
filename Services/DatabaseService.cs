@@ -286,13 +286,30 @@ namespace doc_bursa.Services
             }
         }
 
-        public List<Transaction> GetTransactions(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null)
+        private (bool HasValue, bool IsEmpty, HashSet<string> Accounts) ResolveMasterGroupAccounts(int? masterGroupId)
+        {
+            if (!masterGroupId.HasValue)
+            {
+                return (false, false, new HashSet<string>(StringComparer.OrdinalIgnoreCase));
+            }
+
+            var accounts = GetMasterGroupAccounts(masterGroupId.Value);
+            return (true, accounts.Count == 0, accounts);
+        }
+
+        public List<Transaction> GetTransactions(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, int? masterGroupId = null)
         {
             using var connection = new SqliteConnection(_connectionString);
             connection.Open();
 
             var conditions = new List<string>();
             var command = connection.CreateCommand();
+            var accountsScope = ResolveMasterGroupAccounts(masterGroupId);
+
+            if (accountsScope.IsEmpty && masterGroupId.HasValue)
+            {
+                return new List<Transaction>();
+            }
 
             if (from.HasValue)
             {
@@ -314,8 +331,26 @@ namespace doc_bursa.Services
 
             if (!string.IsNullOrEmpty(account))
             {
+                if (accountsScope.HasValue && !accountsScope.Accounts.Contains(account))
+                {
+                    return new List<Transaction>();
+                }
+
                 conditions.Add("Account = $account");
                 command.Parameters.AddWithValue("$account", account);
+            }
+            else if (accountsScope.HasValue)
+            {
+                var accountParameters = accountsScope.Accounts
+                    .Select((acc, index) => new { Parameter = $"$acc{index}", Value = acc })
+                    .ToList();
+
+                conditions.Add($"Account IN ({string.Join(",", accountParameters.Select(p => p.Parameter))})");
+
+                foreach (var parameter in accountParameters)
+                {
+                    command.Parameters.AddWithValue(parameter.Parameter, parameter.Value);
+                }
             }
 
             var whereClause = conditions.Any() ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
@@ -355,14 +390,14 @@ namespace doc_bursa.Services
             return transactions;
         }
 
-        public Task<List<Transaction>> GetTransactionsAsync(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, CancellationToken cancellationToken = default)
+        public Task<List<Transaction>> GetTransactionsAsync(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, int? masterGroupId = null, CancellationToken cancellationToken = default)
         {
-            return Task.Run(() => GetTransactions(from, to, category, account), cancellationToken);
+            return Task.Run(() => GetTransactions(from, to, category, account, masterGroupId), cancellationToken);
         }
 
-        public List<Transaction> GetTransactionsByAccount(string account)
+        public List<Transaction> GetTransactionsByAccount(string account, int? masterGroupId = null)
         {
-            return GetTransactions(account: account);
+            return GetTransactions(account: account, masterGroupId: masterGroupId);
         }
 
         public void UpdateTransactionCategory(int id, string category)
@@ -910,6 +945,22 @@ namespace doc_bursa.Services
         }
 
         // MasterGroup CRUD operations
+        public HashSet<string> GetMasterGroupAccounts(int masterGroupId)
+        {
+            var group = GetMasterGroups().FirstOrDefault(g => g.Id == masterGroupId);
+            if (group?.AccountNumbers == null || group.AccountNumbers.Count == 0)
+            {
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            return new HashSet<string>(group.AccountNumbers.Where(a => !string.IsNullOrWhiteSpace(a)), StringComparer.OrdinalIgnoreCase);
+        }
+
+        public string? GetMasterGroupName(int masterGroupId)
+        {
+            return GetMasterGroups().FirstOrDefault(g => g.Id == masterGroupId)?.Name;
+        }
+
         public void SaveMasterGroup(MasterGroup group)
         {
             using var connection = new SqliteConnection(_connectionString);

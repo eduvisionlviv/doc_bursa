@@ -12,13 +12,25 @@ namespace doc_bursa.Services
 {
     public class ExportService
     {
+        private readonly DatabaseService _databaseService;
+
+        public ExportService(DatabaseService? databaseService = null)
+        {
+            _databaseService = databaseService ?? new DatabaseService();
+        }
+
         /// <summary>
         /// Експорт звіту у відповідному форматі з урахуванням налаштувань колонок і фільтрів.
         /// </summary>
         public Task<bool> ExportReportAsync(ReportResult result, string filePath, ExportFormat format, ExportOptions? options = null)
         {
             options ??= new ExportOptions();
-            var rows = ApplyFilters(result.Rows, options.Filters);
+            if (!options.MasterGroupId.HasValue && result.MasterGroupId.HasValue)
+            {
+                options.MasterGroupId = result.MasterGroupId;
+            }
+            var rows = ApplyMasterGroupFilter(result.Rows, options.MasterGroupId);
+            rows = ApplyFilters(rows, options.Filters);
 
             return format switch
             {
@@ -51,7 +63,8 @@ namespace doc_bursa.Services
         {
             try
             {
-                var normalizedRows = ApplyFilters(rows, options.Filters).ToList();
+                var scopedRows = ApplyMasterGroupFilter(rows, options.MasterGroupId);
+                var normalizedRows = ApplyFilters(scopedRows, options.Filters).ToList();
                 if (!normalizedRows.Any())
                 {
                     await File.WriteAllTextAsync(filePath, string.Empty, Encoding.UTF8);
@@ -103,7 +116,7 @@ namespace doc_bursa.Services
             {
                 try
                 {
-                    var filtered = ApplyFilters(rows, options.Filters).ToList();
+                    var filtered = ApplyFilters(ApplyMasterGroupFilter(rows, options.MasterGroupId), options.Filters).ToList();
                     var columns = ResolveColumns(filtered, options.SelectedColumns);
 
                     using var workbook = new XLWorkbook();
@@ -146,12 +159,21 @@ namespace doc_bursa.Services
         {
             try
             {
-                var filteredRows = ApplyFilters(result.Rows, options.Filters).ToList();
+                var filteredRows = ApplyMasterGroupFilter(result.Rows, options.MasterGroupId);
+                filteredRows = ApplyFilters(filteredRows, options.Filters).ToList();
                 var columns = ResolveColumns(filteredRows, options.SelectedColumns);
                 var builder = new StringBuilder();
 
                 builder.AppendLine(result.Title);
                 builder.AppendLine($"Період: {result.From:yyyy-MM-dd} - {result.To:yyyy-MM-dd}");
+                if (result.MasterGroupId.HasValue || options.MasterGroupId.HasValue)
+                {
+                    var masterGroupId = options.MasterGroupId ?? result.MasterGroupId;
+                    var groupName = masterGroupId.HasValue
+                        ? _databaseService.GetMasterGroupName(masterGroupId.Value) ?? $"ID {masterGroupId}"
+                        : "Усі";
+                    builder.AppendLine($"Майстер група: {groupName}");
+                }
                 builder.AppendLine(new string('=', 48));
                 builder.AppendLine(string.Join(" | ", columns));
                 builder.AppendLine(new string('-', 48));
@@ -231,6 +253,25 @@ namespace doc_bursa.Services
                 : rows.First().Columns.Keys.ToList();
         }
 
+        private IEnumerable<ReportRow> ApplyMasterGroupFilter(IEnumerable<ReportRow> rows, int? masterGroupId)
+        {
+            if (!masterGroupId.HasValue)
+            {
+                return rows;
+            }
+
+            var accounts = _databaseService.GetMasterGroupAccounts(masterGroupId.Value);
+            if (accounts.Count == 0)
+            {
+                return rows;
+            }
+
+            return rows.Where(r =>
+            {
+                return !TryGetAccountValue(r, out var account) || accounts.Contains(account);
+            });
+        }
+
         private static IEnumerable<ReportRow> ApplyFilters(IEnumerable<ReportRow> rows, Dictionary<string, string> filters)
         {
             if (filters == null || filters.Count == 0)
@@ -239,6 +280,22 @@ namespace doc_bursa.Services
             }
 
             return rows.Where(r => filters.All(f => r.Columns.TryGetValue(f.Key, out var value) && string.Equals(value?.ToString(), f.Value, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        private static bool TryGetAccountValue(ReportRow row, out string account)
+        {
+            var possibleKeys = new[] { "Account", "Рахунок" };
+            foreach (var key in possibleKeys)
+            {
+                if (row.Columns.TryGetValue(key, out var value) && value != null && !string.IsNullOrWhiteSpace(value.ToString()))
+                {
+                    account = value.ToString() ?? string.Empty;
+                    return true;
+                }
+            }
+
+            account = string.Empty;
+            return false;
         }
 
         // ВИПРАВЛЕНО: Повертаємо XLCellValue замість object для сумісності з ClosedXML
