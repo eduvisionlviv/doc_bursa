@@ -35,8 +35,8 @@ namespace doc_bursa.ViewModels
 
             // Ініціалізуємо ViewModels
             DashboardViewModel = new DashboardViewModel(_databaseService);
-            TransactionsViewModel = new TransactionsViewModel(_databaseService);
-            SourcesViewModel = new SourcesViewModel();
+            TransactionsViewModel = new TransactionsViewModel(_databaseService, new CategoryRepository(_databaseService));;
+            SourcesViewModel = new SourcesViewModel(new MonobankService(_databaseService), new PrivatBankService(_databaseService));
             BudgetViewModel = new BudgetViewModel();
             GroupsViewModel = new GroupsViewModel(_databaseService);
             AnalyticsViewModel = new AnalyticsViewModel(_databaseService);
