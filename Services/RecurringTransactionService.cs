@@ -37,6 +37,8 @@ namespace doc_bursa.Services // Виправлено з FinDesk.Services
             recurring.CreatedAt = DateTime.UtcNow;
             recurring.UpdatedAt = DateTime.UtcNow;
             recurring.CalculateNextOccurrence(recurring.StartDate);
+            recurring.IsPlanned = false;
+            recurring.LinkedTransactionId = string.Empty;
 
             _databaseService.SaveRecurringTransaction(recurring);
             return recurring;
@@ -63,6 +65,19 @@ namespace doc_bursa.Services // Виправлено з FinDesk.Services
 
             _databaseService.DeleteRecurringTransaction(id);
             return true;
+        }
+
+        /// <summary>
+        /// Згенерувати майбутні планові транзакції з урахуванням вже проведених операцій.
+        /// </summary>
+        public List<PlannedTransaction> GeneratePlannedTransactions(DateTime? from = null, DateTime? to = null)
+        {
+            var periodStart = from?.Date ?? DateTime.UtcNow.Date;
+            var periodEnd = to?.Date ?? DateTime.UtcNow.Date.AddMonths(1);
+            var recurring = _databaseService.GetRecurringTransactions(onlyActive: true);
+            var actualTransactions = _databaseService.GetTransactions(periodStart, periodEnd);
+
+            return RecurringTransactionPlanner.Generate(recurring, actualTransactions, periodStart, periodEnd);
         }
 
         public async Task<int> ProcessDueAsync(DateTime? onDate = null, CancellationToken cancellationToken = default)

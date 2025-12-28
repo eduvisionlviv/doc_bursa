@@ -13,6 +13,7 @@ namespace doc_bursa.Services
     /// </summary>
     public class TransactionService
     {
+        private const decimal SplitTolerance = 0.01m;
         private readonly DatabaseService _databaseService;
         private readonly DeduplicationService _deduplicationService;
         private readonly CategorizationService _categorizationService;
@@ -47,6 +48,41 @@ namespace doc_bursa.Services
         public List<Transaction> GetTransactions(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, int? masterGroupId = null)
         {
             return _databaseService.GetTransactions(from, to, category, account, masterGroupId);
+        }
+
+        public List<Transaction> GetTransactionTree()
+        {
+            var transactions = _databaseService.GetTransactions();
+            return BuildHierarchy(transactions);
+        }
+
+        public List<Transaction> GetEffectiveTransactions()
+        {
+            var all = _databaseService.GetTransactions();
+            var roots = BuildHierarchy(all);
+            var effective = new List<Transaction>();
+
+            void Collect(Transaction tx)
+            {
+                if (tx.IsSplit && tx.Children.Any())
+                {
+                    foreach (var child in tx.Children)
+                    {
+                        Collect(child);
+                    }
+                }
+                else
+                {
+                    effective.Add(tx);
+                }
+            }
+
+            foreach (var root in roots)
+            {
+                Collect(root);
+            }
+
+            return effective;
         }
 
         public bool MarkAsDuplicate(Guid transactionId)

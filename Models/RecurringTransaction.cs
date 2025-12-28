@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
 namespace doc_bursa.Models
@@ -108,6 +109,16 @@ namespace doc_bursa.Models
         /// </summary>
         public DateTime? UpdatedAt { get; set; }
 
+        /// <summary>
+        /// Позначка, що запис є плановим (згенерованим для календаря).
+        /// </summary>
+        public bool IsPlanned { get; set; }
+
+        /// <summary>
+        /// Ідентифікатор транзакції, яка поглинула плановий запис.
+        /// </summary>
+        public string LinkedTransactionId { get; set; } = string.Empty;
+
         public RecurringTransaction()
         {
             CalculateNextOccurrence(StartDate);
@@ -155,6 +166,50 @@ namespace doc_bursa.Models
             {
                 IsActive = false;
             }
+        }
+
+        /// <summary>
+        /// Отримати дати повторень у визначеному діапазоні.
+        /// </summary>
+        public IEnumerable<DateTime> GetOccurrencesInRange(DateTime from, DateTime to)
+        {
+            var safeInterval = Math.Max(Interval, 1);
+            var current = StartDate.Date;
+
+            if (current < from.Date)
+            {
+                current = AlignToDate(from.Date, safeInterval);
+            }
+
+            while (current <= to.Date && (!EndDate.HasValue || current <= EndDate.Value.Date))
+            {
+                yield return current;
+                current = GetNextDate(current, safeInterval);
+            }
+        }
+
+        private DateTime AlignToDate(DateTime target, int safeInterval)
+        {
+            var current = StartDate.Date;
+            while (current < target)
+            {
+                current = GetNextDate(current, safeInterval);
+            }
+
+            return current;
+        }
+
+        private DateTime GetNextDate(DateTime date, int safeInterval)
+        {
+            return Frequency switch
+            {
+                RecurrenceFrequency.Daily => date.AddDays(safeInterval),
+                RecurrenceFrequency.Weekly => date.AddDays(7 * safeInterval),
+                RecurrenceFrequency.Monthly => date.AddMonths(safeInterval),
+                RecurrenceFrequency.Quarterly => date.AddMonths(3 * safeInterval),
+                RecurrenceFrequency.Yearly => date.AddYears(safeInterval),
+                _ => date
+            };
         }
     }
 }

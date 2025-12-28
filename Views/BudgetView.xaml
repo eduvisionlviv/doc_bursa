@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:sys="clr-namespace:System;assembly=mscorlib"
              mc:Ignorable="d">
     <Grid>
         <Grid.RowDefinitions>
@@ -138,6 +139,57 @@
                             </ItemsControl>
                         </StackPanel>
                     </Grid>
+                </StackPanel>
+            </Border>
+
+            <Border Background="White" Padding="16" CornerRadius="8" Margin="0 12 0 0">
+                <StackPanel>
+                    <TextBlock Text="Календар планових платежів" FontWeight="Bold" FontSize="16" Margin="0 0 0 12"/>
+                    <Calendar DisplayDate="{Binding PlannedPayments[0].PlannedDate, FallbackValue={x:Static sys:DateTime.Today}}" Margin="0 0 0 12"/>
+                    <ScrollViewer Height="220" VerticalScrollBarVisibility="Auto">
+                        <ItemsControl ItemsSource="{Binding PlannedPayments}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="10" Margin="0 0 0 8" CornerRadius="6">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background" Value="#F4F6F8"/>
+                                                <Setter Property="BorderBrush" Value="#E0E0E0"/>
+                                                <Setter Property="BorderThickness" Value="1"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsWarning}" Value="True">
+                                                        <Setter Property="Background" Value="#FFF8E1"/>
+                                                        <Setter Property="BorderBrush" Value="#F39C12"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding IsAbsorbed}" Value="True">
+                                                        <Setter Property="Background" Value="#ECF9F1"/>
+                                                        <Setter Property="BorderBrush" Value="#2ECC71"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="120"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="120"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="{Binding PlannedDate, StringFormat='{}{0:dd.MM.yyyy}'}" FontWeight="Bold"/>
+                                                <TextBlock Text="{Binding Category}" Foreground="#7F8C8D"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="{Binding Description}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding LinkedTransactionId, StringFormat='Прив’язано: {0}'}" Foreground="#2ECC71" Visibility="{Binding IsAbsorbed, Converter={StaticResource BoolToVis}}"/>
+                                                <TextBlock Text="Очікується оплата" Foreground="#D35400" Visibility="{Binding IsWarning, Converter={StaticResource BoolToVis}}"/>
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="2" Text="{Binding Amount, StringFormat='{}{0:N2} ₴'}" HorizontalAlignment="Right" FontWeight="Bold" Foreground="#E74C3C"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </ScrollViewer>
                 </StackPanel>
             </Border>
         </StackPanel>

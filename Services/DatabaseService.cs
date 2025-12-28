@@ -52,9 +52,8 @@ namespace doc_bursa.Services
                     Hash TEXT UNIQUE,
                     IsDuplicate INTEGER DEFAULT 0,
                     OriginalTransactionId TEXT,
-                    IsTransfer INTEGER DEFAULT 0,
-                    TransferStatus TEXT,
-                    TransferCommission REAL
+                    ParentTransactionId TEXT,
+                    IsSplit INTEGER DEFAULT 0
                 );
 
                 CREATE TABLE IF NOT EXISTS DataSources (
@@ -138,7 +137,9 @@ namespace doc_bursa.Services
                     ReminderDays INTEGER,
                     Notes TEXT,
                     CreatedAt TEXT NOT NULL,
-                    UpdatedAt TEXT
+                    UpdatedAt TEXT,
+                    IsPlanned INTEGER DEFAULT 0,
+                    LinkedTransactionId TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS TransferRules (
@@ -197,9 +198,8 @@ namespace doc_bursa.Services
             AddColumnIfMissing("IsDuplicate", "INTEGER DEFAULT 0");
             AddColumnIfMissing("OriginalTransactionId", "TEXT");
             AddColumnIfMissing("Counterparty", "TEXT");
-            AddColumnIfMissing("IsTransfer", "INTEGER DEFAULT 0");
-            AddColumnIfMissing("TransferStatus", "TEXT");
-            AddColumnIfMissing("TransferCommission", "REAL DEFAULT 0");
+            AddColumnIfMissing("ParentTransactionId", "TEXT");
+            AddColumnIfMissing("IsSplit", "INTEGER DEFAULT 0");
         }
 
         private static void EnsureDataSourceColumns(SqliteConnection connection)
@@ -277,11 +277,43 @@ namespace doc_bursa.Services
                     ReminderDays INTEGER,
                     Notes TEXT,
                     CreatedAt TEXT NOT NULL,
-                    UpdatedAt TEXT
+                    UpdatedAt TEXT,
+                    IsPlanned INTEGER DEFAULT 0,
+                    LinkedTransactionId TEXT
                 );
             ";
 
             command.ExecuteNonQuery();
+            EnsureRecurringTransactionColumns(connection);
+        }
+
+        private static void EnsureRecurringTransactionColumns(SqliteConnection connection)
+        {
+            var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var pragma = connection.CreateCommand();
+            pragma.CommandText = "PRAGMA table_info(RecurringTransactions)";
+            using (var reader = pragma.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    existingColumns.Add(reader.GetString(1));
+                }
+            }
+
+            void AddColumnIfMissing(string columnName, string definition)
+            {
+                if (existingColumns.Contains(columnName))
+                {
+                    return;
+                }
+
+                var alterCommand = connection.CreateCommand();
+                alterCommand.CommandText = $"ALTER TABLE RecurringTransactions ADD COLUMN {columnName} {definition}";
+                alterCommand.ExecuteNonQuery();
+            }
+
+            AddColumnIfMissing("IsPlanned", "INTEGER DEFAULT 0");
+            AddColumnIfMissing("LinkedTransactionId", "TEXT");
         }
 
         // Transactions
@@ -293,8 +325,8 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO Transactions 
-                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, IsTransfer, TransferStatus, TransferCommission)
-                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid, $isTransfer, $transferStatus, $transferCommission)
+                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, ParentTransactionId, IsSplit)
+                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid, $parentTid, $isSplit)
             ";
 
             command.Parameters.AddWithValue("$tid", transaction.TransactionId);
@@ -309,9 +341,8 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$hash", transaction.Hash ?? string.Empty);
             command.Parameters.AddWithValue("$isDuplicate", transaction.IsDuplicate ? 1 : 0);
             command.Parameters.AddWithValue("$originalTid", transaction.OriginalTransactionId ?? string.Empty);
-            command.Parameters.AddWithValue("$isTransfer", transaction.IsTransfer ? 1 : 0);
-            command.Parameters.AddWithValue("$transferStatus", transaction.TransferStatus ?? string.Empty);
-            command.Parameters.AddWithValue("$transferCommission", transaction.TransferCommission);
+            command.Parameters.AddWithValue("$parentTid", transaction.ParentTransactionId ?? string.Empty);
+            command.Parameters.AddWithValue("$isSplit", transaction.IsSplit ? 1 : 0);
             command.ExecuteNonQuery();
 
             _logger.Information("Transaction saved: {TransactionId}", transaction.TransactionId);
@@ -326,8 +357,8 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO Transactions 
-                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, IsTransfer, TransferStatus, TransferCommission)
-                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid, $isTransfer, $transferStatus, $transferCommission)
+                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, ParentTransactionId, IsSplit)
+                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid, $parentTid, $isSplit)
             ";
 
             var tidParam = command.Parameters.Add("$tid", SqliteType.Text);
@@ -342,9 +373,8 @@ namespace doc_bursa.Services
             var hashParam = command.Parameters.Add("$hash", SqliteType.Text);
             var isDuplicateParam = command.Parameters.Add("$isDuplicate", SqliteType.Integer);
             var originalTidParam = command.Parameters.Add("$originalTid", SqliteType.Text);
-            var isTransferParam = command.Parameters.Add("$isTransfer", SqliteType.Integer);
-            var transferStatusParam = command.Parameters.Add("$transferStatus", SqliteType.Text);
-            var transferCommissionParam = command.Parameters.Add("$transferCommission", SqliteType.Real);
+            var parentTidParam = command.Parameters.Add("$parentTid", SqliteType.Text);
+            var isSplitParam = command.Parameters.Add("$isSplit", SqliteType.Integer);
 
             foreach (var transaction in transactions)
             {
@@ -360,9 +390,8 @@ namespace doc_bursa.Services
                 hashParam.Value = transaction.Hash ?? string.Empty;
                 isDuplicateParam.Value = transaction.IsDuplicate ? 1 : 0;
                 originalTidParam.Value = transaction.OriginalTransactionId ?? string.Empty;
-                isTransferParam.Value = transaction.IsTransfer ? 1 : 0;
-                transferStatusParam.Value = transaction.TransferStatus ?? string.Empty;
-                transferCommissionParam.Value = transaction.TransferCommission;
+                parentTidParam.Value = transaction.ParentTransactionId ?? string.Empty;
+                isSplitParam.Value = transaction.IsSplit ? 1 : 0;
 
                 command.ExecuteNonQuery();
             }
@@ -447,7 +476,7 @@ namespace doc_bursa.Services
             }
 
             var whereClause = conditions.Any() ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
-            command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, IsTransfer, TransferStatus, TransferCommission FROM Transactions {whereClause} ORDER BY Date DESC";
+            command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, ParentTransactionId, IsSplit FROM Transactions {whereClause} ORDER BY Date DESC";
 
             var transactions = new List<Transaction>();
             using var reader = command.ExecuteReader();
@@ -475,9 +504,8 @@ namespace doc_bursa.Services
                     Hash = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
                     IsDuplicate = !reader.IsDBNull(11) && reader.GetInt32(11) == 1,
                     OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
-                    IsTransfer = !reader.IsDBNull(13) && reader.GetInt32(13) == 1,
-                    TransferStatus = reader.IsDBNull(14) ? string.Empty : reader.GetString(14),
-                    TransferCommission = reader.IsDBNull(15) ? 0 : (decimal)reader.GetDouble(15)
+                    ParentTransactionId = reader.IsDBNull(13) ? string.Empty : reader.GetString(13),
+                    IsSplit = !reader.IsDBNull(14) && reader.GetInt32(14) == 1
                 };
 
                 transactions.Add(transaction);
@@ -519,13 +547,24 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
         }
 
+        public void DeleteChildTransactions(string parentTransactionId)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM Transactions WHERE ParentTransactionId = $parentTid";
+            command.Parameters.AddWithValue("$parentTid", parentTransactionId);
+            command.ExecuteNonQuery();
+        }
+
         public Transaction? GetTransactionByTransactionId(string transactionId)
         {
             using var connection = new SqliteConnection(_connectionString);
             connection.Open();
 
             var command = connection.CreateCommand();
-            command.CommandText = @"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, IsTransfer, TransferStatus, TransferCommission 
+            command.CommandText = @"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, ParentTransactionId, IsSplit 
                                     FROM Transactions WHERE TransactionId = $tid LIMIT 1";
             command.Parameters.AddWithValue("$tid", transactionId);
 
@@ -551,9 +590,8 @@ namespace doc_bursa.Services
                     Hash = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
                     IsDuplicate = !reader.IsDBNull(11) && reader.GetInt32(11) == 1,
                     OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
-                    IsTransfer = !reader.IsDBNull(13) && reader.GetInt32(13) == 1,
-                    TransferStatus = reader.IsDBNull(14) ? string.Empty : reader.GetString(14),
-                    TransferCommission = reader.IsDBNull(15) ? 0 : (decimal)reader.GetDouble(15)
+                    ParentTransactionId = reader.IsDBNull(13) ? string.Empty : reader.GetString(13),
+                    IsSplit = !reader.IsDBNull(14) && reader.GetInt32(14) == 1
                 };
             }
 
@@ -868,8 +906,8 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO RecurringTransactions
-                (Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt)
-                VALUES ($id, $desc, $amount, $cat, $accountId, $freq, $interval, $start, $end, $next, $last, $count, $active, $auto, $reminder, $notes, $created, $updated)";
+                (Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt, IsPlanned, LinkedTransactionId)
+                VALUES ($id, $desc, $amount, $cat, $accountId, $freq, $interval, $start, $end, $next, $last, $count, $active, $auto, $reminder, $notes, $created, $updated, $isPlanned, $linkedTx)";
 
             command.Parameters.AddWithValue("$id", recurring.Id.ToString());
             command.Parameters.AddWithValue("$desc", recurring.Description);
@@ -889,6 +927,8 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$notes", recurring.Notes ?? string.Empty);
             command.Parameters.AddWithValue("$created", recurring.CreatedAt.ToString("o"));
             command.Parameters.AddWithValue("$updated", recurring.UpdatedAt?.ToString("o") ?? string.Empty);
+            command.Parameters.AddWithValue("$isPlanned", recurring.IsPlanned ? 1 : 0);
+            command.Parameters.AddWithValue("$linkedTx", recurring.LinkedTransactionId ?? string.Empty);
 
             command.ExecuteNonQuery();
         }
@@ -899,7 +939,7 @@ namespace doc_bursa.Services
             connection.Open();
 
             var command = connection.CreateCommand();
-            command.CommandText = @"SELECT Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt 
+            command.CommandText = @"SELECT Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt, IsPlanned, LinkedTransactionId 
                                     FROM RecurringTransactions" + (onlyActive ? " WHERE IsActive = 1" : string.Empty);
 
             var result = new List<RecurringTransaction>();
@@ -925,7 +965,9 @@ namespace doc_bursa.Services
                     ReminderDays = reader.GetInt32(14),
                     Notes = reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
                     CreatedAt = DateTime.Parse(reader.GetString(16)),
-                    UpdatedAt = reader.IsDBNull(17) || string.IsNullOrWhiteSpace(reader.GetString(17)) ? null : DateTime.Parse(reader.GetString(17))
+                    UpdatedAt = reader.IsDBNull(17) || string.IsNullOrWhiteSpace(reader.GetString(17)) ? null : DateTime.Parse(reader.GetString(17)),
+                    IsPlanned = !reader.IsDBNull(18) && reader.GetInt32(18) == 1,
+                    LinkedTransactionId = reader.IsDBNull(19) ? string.Empty : reader.GetString(19)
                 };
 
                 result.Add(recurring);
@@ -940,7 +982,7 @@ namespace doc_bursa.Services
             connection.Open();
 
             var command = connection.CreateCommand();
-            command.CommandText = @"SELECT Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt 
+            command.CommandText = @"SELECT Id, Description, Amount, Category, AccountId, Frequency, Interval, StartDate, EndDate, NextOccurrence, LastOccurrence, OccurrenceCount, IsActive, AutoExecute, ReminderDays, Notes, CreatedAt, UpdatedAt, IsPlanned, LinkedTransactionId 
                                     FROM RecurringTransactions WHERE Id = $id LIMIT 1";
             command.Parameters.AddWithValue("$id", id.ToString());
 
@@ -969,7 +1011,9 @@ namespace doc_bursa.Services
                 ReminderDays = reader.GetInt32(14),
                 Notes = reader.IsDBNull(15) ? string.Empty : reader.GetString(15),
                 CreatedAt = DateTime.Parse(reader.GetString(16)),
-                UpdatedAt = reader.IsDBNull(17) || string.IsNullOrWhiteSpace(reader.GetString(17)) ? null : DateTime.Parse(reader.GetString(17))
+                UpdatedAt = reader.IsDBNull(17) || string.IsNullOrWhiteSpace(reader.GetString(17)) ? null : DateTime.Parse(reader.GetString(17)),
+                IsPlanned = !reader.IsDBNull(18) && reader.GetInt32(18) == 1,
+                LinkedTransactionId = reader.IsDBNull(19) ? string.Empty : reader.GetString(19)
             };
         }
 

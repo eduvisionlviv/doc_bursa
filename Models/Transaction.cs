@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 
 namespace doc_bursa.Models
@@ -65,19 +66,19 @@ namespace doc_bursa.Models
         public string OriginalTransactionId { get; set; } = string.Empty;
 
         /// <summary>
-        /// Позначка, що транзакція є внутрішнім переказом.
+        /// Посилання на батьківську транзакцію у разі спліту.
         /// </summary>
-        public bool IsTransfer { get; set; }
+        [MaxLength(128)]
+        public string ParentTransactionId { get; set; } = string.Empty;
 
         /// <summary>
-        /// Статус звірки переказу.
+        /// Позначка, що транзакція була розбита на дочірні.
         /// </summary>
-        [MaxLength(32)]
-        public string TransferStatus { get; set; } = string.Empty;
+        public bool IsSplit { get; set; }
 
         /// <summary>
-        /// Комісія або різниця суми між списанням та зарахуванням.
+        /// Дерево дочірніх транзакцій для відображення у UI.
         /// </summary>
-        public decimal TransferCommission { get; set; }
+        public ObservableCollection<Transaction> Children { get; set; } = new();
     }
 }

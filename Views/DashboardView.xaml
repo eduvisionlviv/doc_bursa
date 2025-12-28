@@ -84,6 +84,10 @@
                                   FontWeight="Bold" 
                                   Foreground="#9B59B6" 
                                   Margin="0,5,0,0"/>
+                        <TextBlock Text="{Binding PlannedExpenses, StringFormat='Планові витрати: {0:N2} ₴'}"
+                                   FontSize="12"
+                                   Foreground="#E5E7EB"
+                                   Margin="0,4,0,0"/>
                     </StackPanel>
                 </Border>
 
