@@ -79,6 +79,43 @@ namespace doc_bursa.Models
         /// </summary>
         public bool IsRecurring { get; set; }
 
+            /// <summary>
+    /// Номер рахунку (для сумісності з BudgetService).
+    /// </summary>
+    [MaxLength(50)]
+    public string? AccountNumber { get; set; }
+
+    /// <summary>
+    /// Чи виконана планова транзакція.
+    /// </summary>
+    public bool IsExecuted { get; set; }
+
+    /// <summary>
+    /// ID пов'язаної транзакції (для RecurringTransactionPlanner).
+    /// </summary>
+    public string? LinkedTransactionId { get; set; }
+
+    /// <summary>
+    /// ID регулярного платежу (альтернативна назва для RecurringTransactionId).
+    /// </summary>
+    public Guid? RecurringId { get; set; }
+
+    /// <summary>
+    /// Назва рахунку (для RecurringTransactionPlanner).
+    /// </summary>
+    [MaxLength(200)]
+    public string? Account { get; set; }
+
+    /// <summary>
+    /// Чи це плановий платіж.
+    /// </summary>
+    public bool IsPlanned { get; set; } = true;
+
+    /// <summary>
+    /// Чи поглинута планова транзакція реальною.
+    /// </summary>
+    public bool IsAbsorbed { get; set; }
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 }
