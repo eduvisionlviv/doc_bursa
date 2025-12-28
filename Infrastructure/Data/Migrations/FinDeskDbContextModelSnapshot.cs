@@ -27,6 +27,9 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                         .HasMaxLength(34)
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("AccountGroupId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<decimal>("Balance")
                         .HasColumnType("TEXT");
 
@@ -54,6 +57,8 @@ namespace doc_bursa.Infrastructure.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("AccountGroupId");
 
                     b.ToTable("Accounts");
                 });
@@ -204,15 +209,22 @@ namespace doc_bursa.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("doc_bursa.Models.MasterGroupAccountGroup", b =>
                 {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("MasterGroupId")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("AccountGroupId")
                         .HasColumnType("INTEGER");
 
-                    b.HasKey("MasterGroupId", "AccountGroupId");
+                    b.HasKey("Id");
 
                     b.HasIndex("AccountGroupId");
+
+                    b.HasIndex("MasterGroupId", "AccountGroupId")
+                        .IsUnique();
 
                     b.ToTable("MasterGroupAccountGroups");
                 });
@@ -370,11 +382,23 @@ namespace doc_bursa.Infrastructure.Data.Migrations
 
             modelBuilder.Entity("doc_bursa.Models.Account", b =>
                 {
+                    b.HasOne("doc_bursa.Models.AccountGroup", "AccountGroup")
+                        .WithMany("Accounts")
+                        .HasForeignKey("AccountGroupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("AccountGroup");
+                });
+
+            modelBuilder.Entity("doc_bursa.Models.Account", b =>
+                {
                     b.Navigation("RecurringTransactions");
                 });
 
             modelBuilder.Entity("doc_bursa.Models.AccountGroup", b =>
                 {
+                    b.Navigation("Accounts");
+
                     b.Navigation("MasterGroupLinks");
                 });
 
@@ -386,4 +410,3 @@ namespace doc_bursa.Infrastructure.Data.Migrations
         }
     }
 }
-

@@ -39,6 +39,13 @@ namespace doc_bursa.Models
         public string Currency { get; set; } = "UAH";
 
         /// <summary>
+        /// Прив'язка рахунку до групи рахунків.
+        /// </summary>
+        public int? AccountGroupId { get; set; }
+
+        public AccountGroup? AccountGroup { get; set; }
+
+        /// <summary>
         /// Поточний баланс рахунку.
         /// </summary>
         public decimal Balance { get; private set; }
@@ -82,4 +89,3 @@ namespace doc_bursa.Models
         }
     }
 }
-
