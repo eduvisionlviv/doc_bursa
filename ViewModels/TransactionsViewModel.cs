@@ -20,7 +20,10 @@ namespace doc_bursa.ViewModels
         private ObservableCollection<Transaction> _transactions;
 
         [ObservableProperty]
-        private MasterGroup _selectedMasterGroup;
+        private MasterGroup? _selectedMasterGroup;
+
+        [ObservableProperty]
+        private Transaction? _selectedTransaction;
 
         [ObservableProperty]
         private DateTime _startDate = DateTime.Today.AddMonths(-1);
