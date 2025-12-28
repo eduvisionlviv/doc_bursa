@@ -45,6 +45,12 @@ namespace doc_bursa.Infrastructure.Data
                 .HasMaxLength(3);
 
             modelBuilder.Entity<Account>()
+                .HasOne(a => a.AccountGroup)
+                .WithMany(g => g.Accounts)
+                .HasForeignKey(a => a.AccountGroupId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            modelBuilder.Entity<Account>()
                 .HasMany(a => a.RecurringTransactions)
                 .WithOne(r => r.Account)
                 .HasForeignKey(r => r.AccountId);
@@ -112,7 +118,11 @@ namespace doc_bursa.Infrastructure.Data
                 .HasMaxLength(500);
 
             modelBuilder.Entity<MasterGroupAccountGroup>()
-                .HasKey(mg => new { mg.MasterGroupId, mg.AccountGroupId });
+                .HasKey(mg => mg.Id);
+
+            modelBuilder.Entity<MasterGroupAccountGroup>()
+                .HasIndex(mg => new { mg.MasterGroupId, mg.AccountGroupId })
+                .IsUnique();
 
             modelBuilder.Entity<MasterGroupAccountGroup>()
                 .HasOne(mg => mg.MasterGroup)
@@ -138,4 +148,3 @@ namespace doc_bursa.Infrastructure.Data
         }
     }
 }
-

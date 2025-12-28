@@ -18,6 +18,7 @@ namespace doc_bursa.Services
     {
         private readonly string _connectionString;
         private readonly ILogger _logger;
+        private readonly EncryptionService _encryption;
 
         public DatabaseService(string? databasePath = null)
         {
@@ -26,6 +27,7 @@ namespace doc_bursa.Services
                 : databasePath;
             _connectionString = $"Data Source={dbPath}";
             _logger = Log.ForContext<DatabaseService>();
+            _encryption = new EncryptionService();
             InitializeDatabase();
         }
 
@@ -79,6 +81,40 @@ namespace doc_bursa.Services
                     IsActive INTEGER DEFAULT 1,
                     Color TEXT,
                     AccountNumbers TEXT
+                );
+
+                CREATE TABLE IF NOT EXISTS AccountGroups (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    Name TEXT NOT NULL,
+                    Description TEXT,
+                    Color TEXT NOT NULL,
+                    Icon TEXT NOT NULL,
+                    CreatedDate TEXT NOT NULL,
+                    IsActive INTEGER DEFAULT 1,
+                    DisplayOrder INTEGER DEFAULT 0
+                );
+
+                CREATE TABLE IF NOT EXISTS MasterGroupAccountGroups (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    MasterGroupId INTEGER NOT NULL,
+                    AccountGroupId INTEGER NOT NULL,
+                    UNIQUE(MasterGroupId, AccountGroupId),
+                    FOREIGN KEY(MasterGroupId) REFERENCES MasterGroups(Id) ON DELETE CASCADE,
+                    FOREIGN KEY(AccountGroupId) REFERENCES AccountGroups(Id) ON DELETE CASCADE
+                );
+
+                CREATE TABLE IF NOT EXISTS Accounts (
+                    Id TEXT PRIMARY KEY,
+                    Name TEXT NOT NULL,
+                    AccountNumber TEXT,
+                    Institution TEXT,
+                    Currency TEXT NOT NULL,
+                    Balance REAL NOT NULL DEFAULT 0,
+                    IsActive INTEGER NOT NULL DEFAULT 1,
+                    CreatedAt TEXT NOT NULL,
+                    UpdatedAt TEXT,
+                    AccountGroupId INTEGER,
+                    FOREIGN KEY(AccountGroupId) REFERENCES AccountGroups(Id) ON DELETE SET NULL
                 );
 
                 CREATE TABLE IF NOT EXISTS RecurringTransactions (
@@ -319,13 +355,19 @@ namespace doc_bursa.Services
             }
         }
 
-        public List<Transaction> GetTransactions(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null)
+        public List<Transaction> GetTransactions(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, IEnumerable<string>? accounts = null)
         {
             using var connection = new SqliteConnection(_connectionString);
             connection.Open();
 
             var conditions = new List<string>();
             var command = connection.CreateCommand();
+            var accountList = accounts?.Where(a => !string.IsNullOrWhiteSpace(a)).Distinct().ToList() ?? new List<string>();
+
+            if (!string.IsNullOrEmpty(account))
+            {
+                accountList.Add(account);
+            }
 
             if (from.HasValue)
             {
@@ -345,10 +387,30 @@ namespace doc_bursa.Services
                 command.Parameters.AddWithValue("$category", category);
             }
 
-            if (!string.IsNullOrEmpty(account))
+            if (accountList.Count > 0)
             {
-                conditions.Add("Account = $account");
-                command.Parameters.AddWithValue("$account", account);
+                var accountParameters = new List<string>();
+                for (var i = 0; i < accountList.Count; i++)
+                {
+                    var parameterName = $"$acc{i}";
+                    accountParameters.Add(parameterName);
+                    command.Parameters.AddWithValue(parameterName, accountList[i]);
+                }
+
+                conditions.Add($"Account IN ({string.Join(",", accountParameters)})");
+            }
+            else if (accountsScope.HasValue)
+            {
+                var accountParameters = accountsScope.Accounts
+                    .Select((acc, index) => new { Parameter = $"$acc{index}", Value = acc })
+                    .ToList();
+
+                conditions.Add($"Account IN ({string.Join(",", accountParameters.Select(p => p.Parameter))})");
+
+                foreach (var parameter in accountParameters)
+                {
+                    command.Parameters.AddWithValue(parameter.Parameter, parameter.Value);
+                }
             }
 
             var whereClause = conditions.Any() ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
@@ -388,14 +450,14 @@ namespace doc_bursa.Services
             return transactions;
         }
 
-        public Task<List<Transaction>> GetTransactionsAsync(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, CancellationToken cancellationToken = default)
+        public Task<List<Transaction>> GetTransactionsAsync(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, IEnumerable<string>? accounts = null, CancellationToken cancellationToken = default)
         {
-            return Task.Run(() => GetTransactions(from, to, category, account), cancellationToken);
+            return Task.Run(() => GetTransactions(from, to, category, account, accounts), cancellationToken);
         }
 
-        public List<Transaction> GetTransactionsByAccount(string account)
+        public List<Transaction> GetTransactionsByAccount(string account, int? masterGroupId = null)
         {
-            return GetTransactions(account: account);
+            return GetTransactions(account: account, masterGroupId: masterGroupId);
         }
 
         public void UpdateTransactionCategory(int id, string category)
@@ -749,9 +811,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.Parameters.AddWithValue("$ping", source.PingStatus ?? string.Empty);
@@ -775,9 +837,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.Parameters.AddWithValue("$ping", source.PingStatus ?? string.Empty);
@@ -804,9 +866,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.Parameters.AddWithValue("$id", source.Id);
@@ -846,9 +908,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.Parameters.AddWithValue("$id", source.Id);
@@ -916,9 +978,9 @@ namespace doc_bursa.Services
                 Id = reader.GetInt32(0),
                 Name = reader.GetString(1),
                 Type = reader.GetString(2),
-                ApiToken = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                ApiToken = DecryptSensitive(reader.IsDBNull(3) ? string.Empty : reader.GetString(3)),
                 ClientId = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                ClientSecret = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+                ClientSecret = DecryptSensitive(reader.IsDBNull(5) ? string.Empty : reader.GetString(5)),
                 IsEnabled = reader.GetInt32(6) == 1,
                 LastSync = string.IsNullOrEmpty(lastSyncRaw) ? null : DateTime.Parse(lastSyncRaw),
                 PingStatus = pingStatus,
@@ -926,33 +988,24 @@ namespace doc_bursa.Services
             };
         }
 
-        private static string SerializeAccounts(List<DiscoveredAccount> accounts)
+        private string EncryptSensitive(string? value)
         {
-            try
-            {
-                return JsonSerializer.Serialize(accounts ?? new List<DiscoveredAccount>());
-            }
-            catch
+            if (string.IsNullOrWhiteSpace(value))
             {
                 return string.Empty;
             }
+
+            return _encryption.IsEncrypted(value) ? value : _encryption.Encrypt(value);
         }
 
-        private static List<DiscoveredAccount> DeserializeAccounts(string raw)
+        private string DecryptSensitive(string? value)
         {
-            if (string.IsNullOrWhiteSpace(raw))
+            if (string.IsNullOrWhiteSpace(value))
             {
-                return new List<DiscoveredAccount>();
+                return string.Empty;
             }
 
-            try
-            {
-                return JsonSerializer.Deserialize<List<DiscoveredAccount>>(raw) ?? new List<DiscoveredAccount>();
-            }
-            catch
-            {
-                return new List<DiscoveredAccount>();
-            }
+            return _encryption.Decrypt(value);
         }
 
         // Category Rules
@@ -986,13 +1039,181 @@ namespace doc_bursa.Services
             return rules;
         }
 
-        // MasterGroup CRUD operations
-        public void SaveMasterGroup(MasterGroup group)
+        // AccountGroup CRUD operations
+        public void SaveAccountGroup(AccountGroup group)
         {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+
+            long accountGroupId = group.Id;
+
+            var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            if (group.Id == 0)
+            {
+                command.CommandText = @"
+                    INSERT INTO AccountGroups (Name, Description, Color, Icon, CreatedDate, IsActive, DisplayOrder)
+                    VALUES ($name, $description, $color, $icon, $createdDate, $isActive, $displayOrder)";
+            }
+            else
+            {
+                command.CommandText = @"
+                    UPDATE AccountGroups
+                    SET Name = $name, Description = $description, Color = $color, Icon = $icon,
+                        IsActive = $isActive, DisplayOrder = $displayOrder
+                    WHERE Id = $id";
+                command.Parameters.AddWithValue("$id", group.Id);
+            }
+
+            command.Parameters.AddWithValue("$name", group.Name ?? string.Empty);
+            command.Parameters.AddWithValue("$description", group.Description ?? string.Empty);
+            command.Parameters.AddWithValue("$color", group.Color ?? "#2196F3");
+            command.Parameters.AddWithValue("$icon", group.Icon ?? "AccountMultiple");
+            command.Parameters.AddWithValue("$createdDate", group.CreatedDate.ToString("o"));
+            command.Parameters.AddWithValue("$isActive", group.IsActive ? 1 : 0);
+            command.Parameters.AddWithValue("$displayOrder", group.DisplayOrder);
+
+            command.ExecuteNonQuery();
+
+            if (group.Id == 0)
+            {
+                accountGroupId = connection.LastInsertRowId;
+                group.Id = (int)accountGroupId;
+            }
+
+            var clearLinks = connection.CreateCommand();
+            clearLinks.Transaction = transaction;
+            clearLinks.CommandText = "DELETE FROM MasterGroupAccountGroups WHERE AccountGroupId = $agid";
+            clearLinks.Parameters.AddWithValue("$agid", accountGroupId);
+            clearLinks.ExecuteNonQuery();
+
+            var distinctLinks = group.MasterGroupLinks
+                .Where(l => l.MasterGroupId > 0)
+                .GroupBy(l => l.MasterGroupId)
+                .Select(g => g.First());
+
+            foreach (var link in distinctLinks)
+            {
+                var linkCommand = connection.CreateCommand();
+                linkCommand.Transaction = transaction;
+                linkCommand.CommandText = @"
+                    INSERT OR IGNORE INTO MasterGroupAccountGroups (MasterGroupId, AccountGroupId)
+                    VALUES ($mid, $agid)";
+                linkCommand.Parameters.AddWithValue("$mid", link.MasterGroupId);
+                linkCommand.Parameters.AddWithValue("$agid", accountGroupId);
+                linkCommand.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+        }
+
+        public List<AccountGroup> GetAccountGroups()
+        {
+            var groups = new List<AccountGroup>();
             using var connection = new SqliteConnection(_connectionString);
             connection.Open();
 
             var command = connection.CreateCommand();
+            command.CommandText = "SELECT Id, Name, Description, Color, Icon, CreatedDate, IsActive, DisplayOrder FROM AccountGroups WHERE IsActive = 1";
+
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var group = new AccountGroup
+                {
+                    Id = reader.GetInt32(0),
+                    Name = reader.GetString(1),
+                    Description = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                    Color = reader.GetString(3),
+                    Icon = reader.GetString(4),
+                    CreatedDate = DateTime.Parse(reader.GetString(5)),
+                    IsActive = reader.GetInt32(6) == 1,
+                    DisplayOrder = reader.GetInt32(7)
+                };
+
+                groups.Add(group);
+            }
+
+            var groupMap = groups.ToDictionary(g => g.Id);
+            var linksCommand = connection.CreateCommand();
+            linksCommand.CommandText = "SELECT Id, MasterGroupId, AccountGroupId FROM MasterGroupAccountGroups";
+
+            using var linksReader = linksCommand.ExecuteReader();
+            while (linksReader.Read())
+            {
+                var link = new MasterGroupAccountGroup
+                {
+                    Id = linksReader.GetInt32(0),
+                    MasterGroupId = linksReader.GetInt32(1),
+                    AccountGroupId = linksReader.GetInt32(2)
+                };
+
+                if (groupMap.TryGetValue(link.AccountGroupId, out var accountGroup))
+                {
+                    link.AccountGroup = accountGroup;
+                    accountGroup.MasterGroupLinks.Add(link);
+                }
+            }
+
+            return groups;
+        }
+
+        public void DeleteAccountGroup(int id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var transaction = connection.BeginTransaction();
+
+            var deleteLinks = connection.CreateCommand();
+            deleteLinks.Transaction = transaction;
+            deleteLinks.CommandText = "DELETE FROM MasterGroupAccountGroups WHERE AccountGroupId = $id";
+            deleteLinks.Parameters.AddWithValue("$id", id);
+            deleteLinks.ExecuteNonQuery();
+
+            var unbindAccounts = connection.CreateCommand();
+            unbindAccounts.Transaction = transaction;
+            unbindAccounts.CommandText = "UPDATE Accounts SET AccountGroupId = NULL WHERE AccountGroupId = $id";
+            unbindAccounts.Parameters.AddWithValue("$id", id);
+            unbindAccounts.ExecuteNonQuery();
+
+            var command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = "UPDATE AccountGroups SET IsActive = 0 WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
+
+            transaction.Commit();
+        }
+
+        // MasterGroup CRUD operations
+        public HashSet<string> GetMasterGroupAccounts(int masterGroupId)
+        {
+            var group = GetMasterGroups().FirstOrDefault(g => g.Id == masterGroupId);
+            if (group?.AccountNumbers == null || group.AccountNumbers.Count == 0)
+            {
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            return new HashSet<string>(group.AccountNumbers.Where(a => !string.IsNullOrWhiteSpace(a)), StringComparer.OrdinalIgnoreCase);
+        }
+
+        public string? GetMasterGroupName(int masterGroupId)
+        {
+            return GetMasterGroups().FirstOrDefault(g => g.Id == masterGroupId)?.Name;
+        }
+
+        public void SaveMasterGroup(MasterGroup group)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+            using var transaction = connection.BeginTransaction();
+
+            long masterGroupId = group.Id;
+
+            var command = connection.CreateCommand();
+            command.Transaction = transaction;
             if (group.Id == 0)
             {
                 command.CommandText = @"
@@ -1017,6 +1238,37 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$accountNumbers", string.Join(",", group.AccountNumbers));
 
             command.ExecuteNonQuery();
+
+            if (group.Id == 0)
+            {
+                masterGroupId = connection.LastInsertRowId;
+                group.Id = (int)masterGroupId;
+            }
+
+            var clearLinks = connection.CreateCommand();
+            clearLinks.Transaction = transaction;
+            clearLinks.CommandText = "DELETE FROM MasterGroupAccountGroups WHERE MasterGroupId = $mid";
+            clearLinks.Parameters.AddWithValue("$mid", masterGroupId);
+            clearLinks.ExecuteNonQuery();
+
+            var distinctLinks = group.AccountGroupLinks
+                .Where(l => l.AccountGroupId > 0)
+                .GroupBy(l => l.AccountGroupId)
+                .Select(g => g.First());
+
+            foreach (var link in distinctLinks)
+            {
+                var linkCommand = connection.CreateCommand();
+                linkCommand.Transaction = transaction;
+                linkCommand.CommandText = @"
+                    INSERT OR IGNORE INTO MasterGroupAccountGroups (MasterGroupId, AccountGroupId)
+                    VALUES ($mid, $agid)";
+                linkCommand.Parameters.AddWithValue("$mid", masterGroupId);
+                linkCommand.Parameters.AddWithValue("$agid", link.AccountGroupId);
+                linkCommand.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
         }
 
         public List<MasterGroup> GetMasterGroups()
@@ -1028,29 +1280,62 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = "SELECT * FROM MasterGroups WHERE IsActive = 1";
 
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
+            using (var reader = command.ExecuteReader())
             {
-                var group = new MasterGroup
+                while (reader.Read())
                 {
-                    Id = reader.GetInt32(0),
-                    Name = reader.GetString(1),
-                    Description = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
-                    CreatedDate = DateTime.Parse(reader.GetString(3)),
-                    IsActive = reader.GetInt32(4) == 1,
-                    Color = reader.IsDBNull(5) ? "#2196F3" : reader.GetString(5)
-                };
-
-                var accountNumbers = reader.IsDBNull(6) ? string.Empty : reader.GetString(6);
-                if (!string.IsNullOrWhiteSpace(accountNumbers))
-                {
-                    foreach (var account in accountNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                    var group = new MasterGroup
                     {
-                        group.AccountNumbers.Add(account);
+                        Id = reader.GetInt32(0),
+                        Name = reader.GetString(1),
+                        Description = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                        CreatedDate = DateTime.Parse(reader.GetString(3)),
+                        IsActive = reader.GetInt32(4) == 1,
+                        Color = reader.IsDBNull(5) ? "#2196F3" : reader.GetString(5)
+                    };
+
+                    var accountNumbers = reader.IsDBNull(6) ? string.Empty : reader.GetString(6);
+                    if (!string.IsNullOrWhiteSpace(accountNumbers))
+                    {
+                        foreach (var account in accountNumbers.Split(',', StringSplitOptions.RemoveEmptyEntries))
+                        {
+                            group.AccountNumbers.Add(account);
+                        }
+                    }
+
+                    groups.Add(group);
+                }
+            }
+
+            var masterGroupMap = groups.ToDictionary(g => g.Id);
+            var accountGroupMap = GetAccountGroups().ToDictionary(g => g.Id);
+
+            var linksCommand = connection.CreateCommand();
+            linksCommand.CommandText = "SELECT Id, MasterGroupId, AccountGroupId FROM MasterGroupAccountGroups";
+
+            using (var linksReader = linksCommand.ExecuteReader())
+            {
+                while (linksReader.Read())
+                {
+                    var link = new MasterGroupAccountGroup
+                    {
+                        Id = linksReader.GetInt32(0),
+                        MasterGroupId = linksReader.GetInt32(1),
+                        AccountGroupId = linksReader.GetInt32(2)
+                    };
+
+                    if (masterGroupMap.TryGetValue(link.MasterGroupId, out var masterGroup))
+                    {
+                        link.MasterGroup = masterGroup;
+
+                        if (accountGroupMap.TryGetValue(link.AccountGroupId, out var accountGroup))
+                        {
+                            link.AccountGroup = accountGroup;
+                        }
+
+                        masterGroup.AccountGroupLinks.Add(link);
                     }
                 }
-
-                groups.Add(group);
             }
 
             return groups;
@@ -1061,10 +1346,21 @@ namespace doc_bursa.Services
             using var connection = new SqliteConnection(_connectionString);
             connection.Open();
 
+            using var transaction = connection.BeginTransaction();
+
+            var deleteLinks = connection.CreateCommand();
+            deleteLinks.Transaction = transaction;
+            deleteLinks.CommandText = "DELETE FROM MasterGroupAccountGroups WHERE MasterGroupId = $id";
+            deleteLinks.Parameters.AddWithValue("$id", id);
+            deleteLinks.ExecuteNonQuery();
+
             var command = connection.CreateCommand();
+            command.Transaction = transaction;
             command.CommandText = "UPDATE MasterGroups SET IsActive = 0 WHERE Id = $id";
             command.Parameters.AddWithValue("$id", id);
             command.ExecuteNonQuery();
+
+            transaction.Commit();
         }
 
         public Task SaveMasterGroupAsync(MasterGroup group, CancellationToken cancellationToken = default)
