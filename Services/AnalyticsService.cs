@@ -5,12 +5,11 @@ using System.Runtime.Caching;
 using System.Threading;
 using System.Threading.Tasks;
 using doc_bursa.Models;
-using doc_bursa.Services;
 
 namespace doc_bursa.Services
 {
     /// <summary>
-    /// Сервіс для аналітики фінансових даних
+    /// Сервіс для аналітики фінансових даних.
     /// </summary>
     public class AnalyticsService
     {
@@ -24,7 +23,7 @@ namespace doc_bursa.Services
         }
 
         /// <summary>
-        /// Отримати статистику по рахунку
+        /// Отримати статистику по рахунку.
         /// </summary>
         public AccountStatistics GetAccountStatistics(string accountNumber, DateTime? startDate = null, DateTime? endDate = null, int? masterGroupId = null)
         {
@@ -35,10 +34,10 @@ namespace doc_bursa.Services
             }
 
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
-            
+
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
-            
+
             if (endDate.HasValue)
                 transactions = transactions.Where(t => t.Date <= endDate.Value).ToList();
 
@@ -64,7 +63,7 @@ namespace doc_bursa.Services
         }
 
         /// <summary>
-        /// Отримати статистику по групі рахунків
+        /// Отримати статистику по майстер-групі (в межах її рахунків).
         /// </summary>
         public GroupStatistics GetGroupStatistics(MasterGroup group, DateTime? startDate = null, DateTime? endDate = null, int? masterGroupId = null)
         {
@@ -78,16 +77,16 @@ namespace doc_bursa.Services
             }
 
             var allTransactions = new List<Transaction>();
-            
+
             foreach (var accountNumber in group.AccountNumbers)
             {
-                var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+                var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
                 allTransactions.AddRange(transactions);
             }
 
             if (startDate.HasValue)
                 allTransactions = allTransactions.Where(t => t.Date >= startDate.Value).ToList();
-            
+
             if (endDate.HasValue)
                 allTransactions = allTransactions.Where(t => t.Date <= endDate.Value).ToList();
 
@@ -110,7 +109,7 @@ namespace doc_bursa.Services
         }
 
         /// <summary>
-        /// Отримати транзакції по категоріях
+        /// Отримати транзакції по категоріях (суми модулем).
         /// </summary>
         public Dictionary<string, decimal> GetTransactionsByCategory(string accountNumber, DateTime? startDate = null, DateTime? endDate = null, int? masterGroupId = null)
         {
@@ -121,10 +120,10 @@ namespace doc_bursa.Services
             }
 
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
-            
+
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
-            
+
             if (endDate.HasValue)
                 transactions = transactions.Where(t => t.Date <= endDate.Value).ToList();
 
@@ -148,7 +147,7 @@ namespace doc_bursa.Services
         }
 
         /// <summary>
-        /// Отримати транзакції по місяцях
+        /// Отримати транзакції по місяцях.
         /// </summary>
         public Dictionary<string, MonthlyStatistics> GetMonthlyStatistics(string accountNumber, int year, int? masterGroupId = null)
         {
@@ -161,6 +160,7 @@ namespace doc_bursa.Services
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId)
                 .Where(t => t.Date.Year == year)
                 .ToList();
+
             transactions = FilterTransfers(transactions);
 
             var operationalTransactions = TransactionFilterHelper.FilterOperationalTransactions(transactions, out _);
@@ -283,8 +283,8 @@ namespace doc_bursa.Services
                 return new List<Transaction>();
             }
 
-            var mean = amounts.Average(); // Returns decimal
-            var variance = amounts.Select(a => Math.Pow((double)a - (double)mean, 2)).Average(); // Виправлено: явне приведення mean до double
+            var mean = amounts.Average();
+            var variance = amounts.Select(a => Math.Pow((double)a - (double)mean, 2)).Average();
             var stdDev = Math.Sqrt(variance);
 
             if (stdDev == 0)
@@ -300,6 +300,35 @@ namespace doc_bursa.Services
 
             _cache.Set(cacheKey, anomalies, _defaultPolicy);
             return anomalies;
+        }
+
+        /// <summary>
+        /// Сума майбутніх планових витрат (невиконаних) у періоді.
+        /// Використовується для метрики "Вільні кошти" = Поточний баланс - Планові витрати.
+        /// </summary>
+        public decimal GetPlannedExpenseTotal(DateTime from, DateTime to)
+        {
+            var rules = _databaseService.GetRecurringTransactions(onlyActive: true);
+            if (!rules.Any())
+                return 0m;
+
+            var actualTransactions = _databaseService.GetTransactions(from, to);
+
+            var projectionStart = DateTime.Now > from ? DateTime.Now : from;
+
+            var plannedItems = RecurringTransactionPlanner.Generate(
+                rules,
+                actualTransactions,
+                projectionStart,
+                to
+            );
+
+            var futureExpenses = plannedItems
+                .Where(p => string.IsNullOrEmpty(p.LinkedTransactionId))
+                .Where(p => p.Amount < 0)
+                .Sum(p => Math.Abs(p.Amount));
+
+            return futureExpenses;
         }
 
         private static List<Transaction> FilterTransfers(List<Transaction> transactions, bool includeTransfers = false)
@@ -318,15 +347,15 @@ namespace doc_bursa.Services
         }
 
         /// <summary>
-        /// Отримати топ контрагентів
+        /// Отримати топ контрагентів.
         /// </summary>
         public List<CounterpartyStatistics> GetTopCounterparties(string accountNumber, int topCount = 10, DateTime? startDate = null, DateTime? endDate = null, int? masterGroupId = null)
         {
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
-            
+
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
-            
+
             if (endDate.HasValue)
                 transactions = transactions.Where(t => t.Date <= endDate.Value).ToList();
 
@@ -351,7 +380,7 @@ namespace doc_bursa.Services
         }
 
         /// <summary>
-        /// Порівняльний аналіз періодів
+        /// Порівняльний аналіз періодів.
         /// </summary>
         public PeriodComparison ComparePeriods(string accountNumber, DateTime period1Start, DateTime period1End, DateTime period2Start, DateTime period2End, int? masterGroupId = null)
         {
@@ -372,7 +401,7 @@ namespace doc_bursa.Services
         {
             if (oldValue == 0)
                 return newValue > 0 ? 100 : 0;
-            
+
             return ((newValue - oldValue) / oldValue) * 100;
         }
 
@@ -396,38 +425,10 @@ namespace doc_bursa.Services
         }
     }
 
-    // Класи для статистики
+    // DTO/моделі для аналітики
+
     public class AccountStatistics
-    
-    
-            public decimal GetPlannedExpenseTotal(DateTime from, DateTime to)
-        {
-            // 1. Беремо тільки АКТИВНІ регулярні платежі
-            var rules = _databaseService.GetRecurringTransactions(onlyActive: true);
-            
-            if (!rules.Any()) return 0m;
-
-            // 2. Отримуємо вже здійснені транзакції за цей період
-            var actualTransactions = _databaseService.GetTransactions(from, to);
-
-            // 3. Генеруємо план
-            var projectionStart = DateTime.Now > from ? DateTime.Now : from;
-            
-            var plannedItems = RecurringTransactionPlanner.Generate(
-                rules, 
-                actualTransactions, 
-                projectionStart, 
-                to
-            );
-
-            // 4. Сумуємо тільки невиконані витрати
-            var futureExpenses = plannedItems
-                .Where(p => string.IsNullOrEmpty(p.LinkedTransactionId)) // Тільки невиконані
-                .Where(p => p.Amount < 0) // Тільки витрати
-                .Sum(p => Math.Abs(p.Amount));
-
-            return futureExpenses;
-        }{
+    {
         public string AccountNumber { get; set; } = string.Empty;
         public int TotalTransactions { get; set; }
         public decimal TotalDebit { get; set; }
@@ -481,41 +482,8 @@ namespace doc_bursa.Services
         public decimal TransactionGrowth { get; set; }
     }
 
-                    public decimal GetPlannedExpenseTotal(DateTime from, DateTime to)
-        {
-            // 1. Беремо тільки АКТИВНІ регулярні платежі
-            var rules = _databaseService.GetRecurringTransactions(onlyActive: true);
-            
-            if (!rules.Any()) return 0m;
-
-            // 2. Отримуємо вже здійснені транзакції за цей період
-            // Це потрібно, щоб система зрозуміла: "Оренда за цей місяць ВЖЕ сплачена", і не рахувала її в план
-            var actualTransactions = _databaseService.GetTransactions(from, to);
-
-            // 3. Генеруємо план (використовуємо існуючий Planner)
-            // Важливо: StartDate для планування = Зараз (DateTime.Now), щоб не планувати минуле
-            var projectionStart = DateTime.Now > from ? DateTime.Now : from;
-            
-            var plannedItems = RecurringTransactionPlanner.Generate(
-                rules, 
-                actualTransactions, 
-                
-                projectionStart, 
-                to
-            );
-
-                        // 4. Сумуємо тільки ті, що є витратами (< 0) і ще НЕ мають прив'язки до реальної транзакції
-            var futureExpenses = plannedItems
-                .Where(p => string.IsNullOrEmpty(p.LinkedTransactionId)) // Тільки ті, що ще не відбулися (немає пари)
-                .Where(p => p.Amount < 0) // Тільки витрати
-                .Sum(p => Math.Abs(p.Amount));
-
-                                return futureExpenses;
-
-        }
     public enum TrendGranularity
     {
-
         Daily,
         Weekly,
         Monthly
