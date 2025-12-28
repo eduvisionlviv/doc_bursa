@@ -266,8 +266,9 @@ namespace doc_bursa.Services
         {
             var db = new DatabaseService();
             var dedup = new DeduplicationService(db);
-            var txService = new TransactionService(db, dedup);
-            var service = new CsvImportService(db, new CategorizationService(db), txService);
+            var categorizationService = new CategorizationService(db);
+            var txService = new TransactionService(db, dedup, categorizationService);
+            var service = new CsvImportService(db, categorizationService, txService);
             await service.ImportFromCsvAsync(filePath, cancellationToken: cancellationToken);
             return new List<Transaction>(); 
         }

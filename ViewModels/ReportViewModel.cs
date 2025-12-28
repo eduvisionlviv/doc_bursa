@@ -48,8 +48,8 @@ namespace doc_bursa.ViewModels
         {
             var db = new DatabaseService();
             var dedup = new DeduplicationService(db);
-            var transactionService = new TransactionService(db, dedup);
             var categorization = new CategorizationService(db);
+            var transactionService = new TransactionService(db, dedup, categorization);
             var budgetService = new BudgetService(db, transactionService, categorization);
 
             _reportService = new ReportService(transactionService, budgetService, categorization);
@@ -116,4 +116,3 @@ namespace doc_bursa.ViewModels
         }
     }
 }
-

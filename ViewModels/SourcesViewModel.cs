@@ -56,7 +56,7 @@ namespace doc_bursa.ViewModels
             
             var catService = new CategorizationService(_db);
             var dedupService = new DeduplicationService(_db);
-            _transactionService = new TransactionService(_db, dedupService);
+            _transactionService = new TransactionService(_db, dedupService, catService);
             _csvImport = new CsvImportService(_db, catService, _transactionService);
             _excelImport = new ExcelImportService(_db, catService, _transactionService);
             _importLog = new ImportLogService();
