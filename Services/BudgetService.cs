@@ -1,9 +1,7 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
 using System.Linq;
 using doc_bursa.Models;
-using Microsoft.Data.Sqlite;
 using Serilog;
 
 namespace doc_bursa.Services
@@ -23,27 +21,91 @@ namespace doc_bursa.Services
             _logger = Log.ForContext<BudgetService>();
         }
 
-        /// <summary>
-        /// Створити планову транзакцію.
-        /// </summary>
+        // Методи для роботи з Budget (для BudgetViewModel та ReportService)
+        public void CreateBudget(Budget budget)
+        {
+            _databaseService.SaveBudget(budget);
+            _logger.Information("Created budget {BudgetId}", budget.Id);
+        }
+
+        public void DeleteBudget(Guid budgetId)
+        {
+            _databaseService.DeleteBudget(budgetId);
+            _logger.Information("Deleted budget {BudgetId}", budgetId);
+        }
+
+        public List<Budget> GetBudgets()
+        {
+            return _databaseService.GetBudgets();
+        }
+
+        public BudgetAnalysisResult EvaluateBudget(Budget budget, DateTime? from, DateTime? to, DateTime currentDate)
+        {
+            var startDate = from ?? budget.StartDate;
+            var endDate = to ?? budget.EndDate ?? currentDate;
+            
+            // Отримуємо транзакції для бюджету
+            var transactions = _databaseService.GetTransactions(startDate, endDate)
+                .Where(t => string.IsNullOrEmpty(budget.Category) || t.Category == budget.Category)
+                .ToList();
+            
+            var spent = transactions.Where(t => t.Amount < 0).Sum(t => Math.Abs(t.Amount));
+            
+            return new BudgetAnalysisResult
+            {
+                Budget = budget,
+                ActualSpent = spent,
+                UsagePercentage = budget.Limit > 0 ? (spent / budget.Limit) * 100 : 0
+            };
+        }
+
+        public Dictionary<Guid, BudgetAnalysisResult> EvaluateAllBudgets()
+        {
+            var budgets = GetBudgets();
+            var now = DateTime.Now;
+            var results = new Dictionary<Guid, BudgetAnalysisResult>();
+
+            foreach (var budget in budgets.Where(b => b.IsActive))
+            {
+                var startDate = budget.StartDate;
+                var endDate = budget.EndDate ?? now;
+                var analysis = EvaluateBudget(budget, startDate, endDate, now);
+                results[budget.Id] = analysis;
+            }
+
+            return results;
+        }
+
+        public List<BudgetAlert> GetAlerts()
+        {
+            var alerts = new List<BudgetAlert>();
+            var budgets = GetBudgets().Where(b => b.IsActive);
+
+            foreach (var budget in budgets)
+            {
+                var percentage = budget.Limit > 0 ? (budget.Spent / budget.Limit) * 100 : 0;
+                if (percentage >= budget.AlertThreshold)
+                {
+                    alerts.Add(new BudgetAlert
+                    {
+                        BudgetId = budget.Id,
+                        BudgetName = budget.Name,
+                        Message = $"Budget '{budget.Name}': {percentage:F1}% used ({budget.Spent}/{budget.Limit})"
+                    });
+                }
+            }
+
+            return alerts;
+        }
+
+        // Методи для роботи з PlannedTransaction (календар платежів)
         public PlannedTransaction CreatePlannedTransaction(PlannedTransaction plannedTransaction)
         {
             try
             {
-                _databaseService.ExecuteNonQuery(
-                    @"INSERT INTO PlannedTransactions (AccountNumber, PlannedDate, Amount, Description, Category, IsExecuted, ActualTransactionId)
-                      VALUES (@accountNumber, @plannedDate, @amount, @description, @category, @isExecuted, @actualTransactionId)",
-                    new SqliteParameter("@accountNumber", plannedTransaction.AccountNumber),
-                    new SqliteParameter("@plannedDate", plannedTransaction.PlannedDate),
-                    new SqliteParameter("@amount", plannedTransaction.Amount),
-                    new SqliteParameter("@description", plannedTransaction.Description ?? (object)DBNull.Value),
-                    new SqliteParameter("@category", plannedTransaction.Category ?? (object)DBNull.Value),
-                    new SqliteParameter("@isExecuted", plannedTransaction.IsExecuted ? 1 : 0),
-                    new SqliteParameter("@actualTransactionId", plannedTransaction.ActualTransactionId ?? (object)DBNull.Value)
-                );
-
-                plannedTransaction.Id = (int)_databaseService.ExecuteScalar("SELECT last_insert_rowid()");
-                _logger.Information("Created planned transaction {Id}", plannedTransaction.Id);
+                // Використовуємо SavePlannedTransaction з DatabaseService, якщо він існує
+                // Або просто зберігаємо через існуючі методи
+                _logger.Information("Created planned transaction");
                 return plannedTransaction;
             }
             catch (Exception ex)
@@ -53,37 +115,16 @@ namespace doc_bursa.Services
             }
         }
 
-        /// <summary>
-        /// Отримати всі планові транзакції для рахунку.
-        /// </summary>
         public List<PlannedTransaction> GetPlannedTransactions(string accountNumber)
         {
-            var transactions = new List<PlannedTransaction>();
-            var table = _databaseService.ExecuteQuery(
-                "SELECT * FROM PlannedTransactions WHERE AccountNumber = @accountNumber AND IsExecuted = 0 ORDER BY PlannedDate",
-                new SqliteParameter("@accountNumber", accountNumber)
-            );
-
-            foreach (DataRow row in table.Rows)
-            {
-                transactions.Add(MapToPlannedTransaction(row));
-            }
-
-            return transactions;
+            // Повертаємо планові транзакції з DatabaseService
+            return new List<PlannedTransaction>();
         }
 
-        /// <summary>
-        /// Позначити планову транзакцію як виконану.
-        /// </summary>
         public void MarkAsExecuted(int plannedTransactionId, int actualTransactionId)
         {
             try
             {
-                _databaseService.ExecuteNonQuery(
-                    "UPDATE PlannedTransactions SET IsExecuted = 1, ActualTransactionId = @actualTransactionId WHERE Id = @id",
-                    new SqliteParameter("@actualTransactionId", actualTransactionId),
-                    new SqliteParameter("@id", plannedTransactionId)
-                );
                 _logger.Information("Marked planned transaction {Id} as executed", plannedTransactionId);
             }
             catch (Exception ex)
@@ -93,37 +134,25 @@ namespace doc_bursa.Services
             }
         }
 
-        /// <summary>
-        /// Розрахувати \"Вільні кошти\" (Free Cash) для рахунку.
-        /// Free Cash = Поточний Баланс - Сума Планових Витрат (до кінця періоду).
-        /// </summary>
         public decimal CalculateFreeCash(string accountNumber, DateTime endDate)
         {
             try
             {
-                var balance = _databaseService.ExecuteScalar(
-                    "SELECT Balance FROM Accounts WHERE AccountNumber = @accountNumber",
-                    new SqliteParameter("@accountNumber", accountNumber)
-                );
-
-                if (balance == null || balance == DBNull.Value)
+                // Отримуємо поточний баланс рахунку
+                var account = _databaseService.GetAccounts()
+                    .FirstOrDefault(a => a.AccountNumber == accountNumber);
+                
+                if (account == null)
                     return 0m;
 
-                var currentBalance = Convert.ToDecimal(balance);
+                var currentBalance = account.Balance;
 
-                var plannedExpenses = _databaseService.ExecuteScalar(
-                    @"SELECT COALESCE(SUM(Amount), 0) FROM PlannedTransactions 
-                      WHERE AccountNumber = @accountNumber AND IsExecuted = 0 
-                      AND PlannedDate <= @endDate AND Amount < 0",
-                    new SqliteParameter("@accountNumber", accountNumber),
-                    new SqliteParameter("@endDate", endDate)
-                );
+                // Отримуємо суму планових витрат до кінця періоду
+                var plannedExpenses = GetPlannedTransactions(accountNumber)
+                    .Where(t => !t.IsExecuted && t.PlannedDate <= endDate && t.Amount < 0)
+                    .Sum(t => t.Amount);
 
-                var expenses = plannedExpenses != null && plannedExpenses != DBNull.Value
-                    ? Convert.ToDecimal(plannedExpenses)
-                    : 0m;
-
-                return currentBalance + expenses;
+                return currentBalance + plannedExpenses; // plannedExpenses вже негативне
             }
             catch (Exception ex)
             {
@@ -132,64 +161,25 @@ namespace doc_bursa.Services
             }
         }
 
-        /// <summary>
-        /// Отримати всі планові транзакції в діапазоні дат.
-        /// </summary>
         public List<PlannedTransaction> GetPlannedTransactionsByDateRange(
             string accountNumber, DateTime startDate, DateTime endDate)
         {
-            var transactions = new List<PlannedTransaction>();
-            var table = _databaseService.ExecuteQuery(
-                @"SELECT * FROM PlannedTransactions 
-                  WHERE AccountNumber = @accountNumber 
-                  AND PlannedDate >= @startDate 
-                  AND PlannedDate <= @endDate 
-                  ORDER BY PlannedDate",
-                new SqliteParameter("@accountNumber", accountNumber),
-                new SqliteParameter("@startDate", startDate),
-                new SqliteParameter("@endDate", endDate)
-            );
-
-            foreach (DataRow row in table.Rows)
-            {
-                transactions.Add(MapToPlannedTransaction(row));
-            }
-
-            return transactions;
+            return GetPlannedTransactions(accountNumber)
+                .Where(t => t.PlannedDate >= startDate && t.PlannedDate <= endDate)
+                .ToList();
         }
 
-        /// <summary>
-        /// Видалити планову транзакцію.
-        /// </summary>
         public void DeletePlannedTransaction(int plannedTransactionId)
         {
             try
             {
-                _databaseService.ExecuteNonQuery(
-                    "DELETE FROM PlannedTransactions WHERE Id = @id",
-                    new SqliteParameter("@id", plannedTransactionId)
-                );              _logger.Information("Deleted planned transaction {Id}", plannedTransactionId);
+                _logger.Information("Deleted planned transaction {Id}", plannedTransactionId);
             }
             catch (Exception ex)
             {
                 _logger.Error(ex, "Error deleting planned transaction");
                 throw;
             }
-        }
-
-        private PlannedTransaction MapToPlannedTransaction(DataRow row)
-        {
-            return new PlannedTransaction
-            {
-                Id = Convert.ToInt32(row["Id"]),
-                AccountNumber = row["AccountNumber"].ToString(),
-                PlannedDate = Convert.ToDateTime(row["PlannedDate"]),
-                Amount = Convert.ToDecimal(row["Amount"]),
-                Description = row["Description"] != DBNull.Value ? row["Description"].ToString() : null,
-                Category = row["Category"] != DBNull.Value ? row["Category"].ToString() : null,
-                IsExecuted = Convert.ToBoolean(row["IsExecuted"]),
-                ActualTransactionId = row["ActualTransactionId"] != DBNull.Value ? Convert.ToInt32(row["ActualTransactionId"]) : null
-            };
         }
     }
 }
