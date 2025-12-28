@@ -35,14 +35,17 @@ namespace doc_bursa.ViewModels
         [ObservableProperty]
         private int totalPages = 1;
 
+        [ObservableProperty]
+        private MasterGroup? selectedMasterGroup;
+
         public List<string> Categories { get; } = new()
         {
             "Всі", "Продукти", "Транспорт", "Ресторани", "Здоров'я", "Розваги", "Дохід", "Інше"
         };
 
-        public TransactionsViewModel()
+        public TransactionsViewModel(DatabaseService? databaseService = null)
         {
-            _db = new DatabaseService();
+            _db = databaseService ?? new DatabaseService();
             _categorization = new CategorizationService(_db);
             LoadTransactions();
         }
@@ -50,7 +53,8 @@ namespace doc_bursa.ViewModels
         [RelayCommand]
         private void LoadTransactions()
         {
-            var allTransactions = _db.GetTransactions();
+            var accountFilter = SelectedMasterGroup?.AccountNumbers ?? Array.Empty<string>();
+            var allTransactions = _db.GetTransactions(accounts: accountFilter);
 
             if (!string.IsNullOrEmpty(SearchText))
             {
@@ -126,6 +130,11 @@ namespace doc_bursa.ViewModels
             CurrentPage = 1;
             LoadTransactions();
         }
+
+        partial void OnSelectedMasterGroupChanged(MasterGroup? value)
+        {
+            CurrentPage = 1;
+            LoadTransactions();
+        }
     }
 }
-

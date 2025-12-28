@@ -35,6 +35,11 @@ namespace doc_bursa.ViewModels
         [ObservableProperty]
         private string selectedPeriod = "Поточний місяць";
 
+        [ObservableProperty]
+        private MasterGroup? selectedMasterGroup;
+
+        public ObservableCollection<MasterGroup> MasterGroups { get; } = new();
+
         // === ГРАФІК 1: ТРЕНД (ЛІНІЯ) ===
         private ISeries[] miniTrendSeries = Array.Empty<ISeries>();
         public ISeries[] MiniTrendSeries
@@ -66,9 +71,9 @@ namespace doc_bursa.ViewModels
             "Весь час"
         };
 
-        public DashboardViewModel()
+        public DashboardViewModel(DatabaseService? databaseService = null)
         {
-            _db = new DatabaseService();
+            _db = databaseService ?? new DatabaseService();
             LoadData();
         }
 
@@ -76,7 +81,8 @@ namespace doc_bursa.ViewModels
         private void LoadData()
         {
             var (from, to) = GetDateRange();
-            var transactions = _db.GetTransactions(from, to);
+            var accountFilter = SelectedMasterGroup?.AccountNumbers ?? Array.Empty<string>();
+            var transactions = _db.GetTransactions(from, to, accounts: accountFilter);
 
             TotalIncome = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
             TotalExpenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
@@ -168,6 +174,11 @@ namespace doc_bursa.ViewModels
             LoadData();
         }
 
+        partial void OnSelectedMasterGroupChanged(MasterGroup? value)
+        {
+            LoadData();
+        }
+
         private (DateTime?, DateTime?) GetDateRange()
         {
             var now = DateTime.Now;
@@ -179,6 +190,24 @@ namespace doc_bursa.ViewModels
                 "Поточний рік" => (new DateTime(now.Year, 1, 1), now),
                 _ => (null, null)
             };
+        }
+
+        public void UpdateMasterGroups(IEnumerable<MasterGroup> masterGroups, MasterGroup? currentSelection)
+        {
+            MasterGroups.Clear();
+            foreach (var group in masterGroups)
+            {
+                MasterGroups.Add(group);
+            }
+
+            if (currentSelection != null)
+            {
+                SelectedMasterGroup = MasterGroups.FirstOrDefault(g => g.Id == currentSelection.Id) ?? currentSelection;
+            }
+            else if (SelectedMasterGroup == null)
+            {
+                SelectedMasterGroup = MasterGroups.FirstOrDefault();
+            }
         }
     }
 }
