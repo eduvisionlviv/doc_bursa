@@ -61,6 +61,49 @@ namespace doc_bursa.Services
                                               || ContainsKeyword(transaction.Source, PendingKeywords));
         }
 
+                /// <summary>
+        /// Отримати ефективні транзакції з урахуванням контексту MasterGroup.
+        /// Перекази між рахунками однієї групи не враховуються. Для глобального перегляду всі внутрішні перекази ігноруються.
+        /// </summary>
+        public static List<Transaction> GetEffectiveTransactions(
+            IEnumerable<Transaction> allTransactions, 
+            HashSet<string>? contextAccountNumbers = null)
+        {
+            var result = new List<Transaction>();
+            bool isGlobalContext = contextAccountNumbers == null || contextAccountNumbers.Count == 0;
+
+            foreach (var tx in allTransactions)
+            {
+                // 1. Якщо це звичайна транзакція (не переказ) -> беремо завжди
+                if (!tx.IsTransfer)
+                {
+                    result.Add(tx);
+                    continue;
+                }
+
+                // 2. Логіка для ПЕРЕКАЗІВ
+                if (isGlobalContext)
+                {
+                    // Глобальний вигляд: Ігноруємо внутрішні перекази, бо вони дають 0 в сумі.
+                    continue; 
+                }
+                else
+                {
+                    // Вигляд конкретної групи (MasterGroup)
+                    bool accountBelongsToGroup = contextAccountNumbers.Contains(tx.Account ?? string.Empty);
+
+                    if (accountBelongsToGroup)
+                    {
+                        // Якщо рахунок наш - показуємо транзакцію як є.
+                        // - Якщо це списання (-100) -> для групи це Витрата.
+                        // - Якщо це зарахування (+100) -> для групи це Дохід.
+                        result.Add(tx);
+                    }
+                }
+            }
+            return result;
+        }
+
         private static bool ContainsKeyword(string? source, IReadOnlyCollection<string> keywords)
         {
             if (string.IsNullOrWhiteSpace(source))
