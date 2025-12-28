@@ -457,7 +457,6 @@ namespace doc_bursa.Services
             // Return 0 for now as this is a placeholder
             return 0m;
         }
-
     public enum TrendGranularity
     {
         Daily,
