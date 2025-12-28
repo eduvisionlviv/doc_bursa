@@ -1625,5 +1625,26 @@ namespace doc_bursa.Services
 
             return accountNumber;
         }
+
+                private static string SerializeAccounts(List<DiscoveredAccount>? accounts)
+        {
+            if (accounts == null || accounts.Count == 0)
+                return string.Empty;
+            return JsonSerializer.Serialize(accounts);
+        }
+
+        private static List<DiscoveredAccount> DeserializeAccounts(string? json)
+        {
+            if (string.IsNullOrWhiteSpace(json))
+                return new List<DiscoveredAccount>();
+            try
+            {
+                return JsonSerializer.Deserialize<List<DiscoveredAccount>>(json) ?? new List<DiscoveredAccount>();
+            }
+            catch
+            {
+                return new List<DiscoveredAccount>();
+            }
+        }
     }
 }
