@@ -156,11 +156,49 @@ namespace doc_bursa.Services
             }
         }
 
-        public async Task ApplySplit(Transaction parent, List<Transaction> children)
+            public async Task ApplySplit(Transaction parent, List<Transaction> children)
+    {
+        // 1. ВАЛІДАЦІЯ (Бізнес-правило: Сума частин = Сумі цілого)
+        // Використовуємо Math.Abs для коректної роботи і з витратами (-), і з доходами (+)
+        decimal parentAmount = Math.Abs(parent.Amount);
+        decimal childrenTotal = children.Sum(c => Math.Abs(c.Amount));
+
+        if (Math.Abs(parentAmount - childrenTotal) > 0.01m)
         {
-            // Тут має бути логіка збереження в БД
-            await Task.CompletedTask; 
+            throw new InvalidOperationException($"Помилка балансу: Сума частин ({childrenTotal}) не збігається з транзакцією ({parentAmount}).");
         }
+
+        // 2. ПІДГОТОВКА ДАНИХ
+        // Маркуємо батьківську транзакцію, щоб вона не враховувалась у звітах двічі
+        parent.IsSplit = true; 
+        
+        // Налаштовуємо дочірні транзакції
+        foreach (var child in children)
+        {
+            // Критично: генеруємо новий ID, бо це внутрішні сутності FinDesk, банк про них не знає
+            child.TransactionId = Guid.NewGuid().ToString(); 
+            
+            // Зв'язок
+            child.ParentTransactionId = parent.TransactionId;
+            
+            // Спадкування метаданих
+            child.Date = parent.Date;
+            child.AccountId = parent.AccountId;
+            child.Account = parent.Account;
+            child.Currency = parent.Currency;
+            child.Source = "Split"; // Маркер, що це штучний запис
+            child.IsSplit = false;  // Дитина не може бути розділена (поки що)
+        }
+
+        // 3. АТОМАРНЕ ЗБЕРЕЖЕННЯ (Transaction Scope)
+        var batch = new List<Transaction> { parent };
+        batch.AddRange(children);
+
+        // Використовуємо існуючий метод, який огортає все в SQL Transaction
+        await _databaseService.SaveTransactionsAsync(batch);
+        
+        _logger.Information("Transaction {Tid} split into {Count} parts", parent.TransactionId, children.Count);
+    }}
 
         public Transaction CreateChildTransaction(Transaction parent)
         {
