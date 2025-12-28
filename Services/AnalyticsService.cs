@@ -398,7 +398,36 @@ namespace doc_bursa.Services
 
     // Класи для статистики
     public class AccountStatistics
-    {
+    
+    
+            public decimal GetPlannedExpenseTotal(DateTime from, DateTime to)
+        {
+            // 1. Беремо тільки АКТИВНІ регулярні платежі
+            var rules = _databaseService.GetRecurringTransactions(onlyActive: true);
+            
+            if (!rules.Any()) return 0m;
+
+            // 2. Отримуємо вже здійснені транзакції за цей період
+            var actualTransactions = _databaseService.GetTransactions(from, to);
+
+            // 3. Генеруємо план
+            var projectionStart = DateTime.Now > from ? DateTime.Now : from;
+            
+            var plannedItems = RecurringTransactionPlanner.Generate(
+                rules, 
+                actualTransactions, 
+                projectionStart, 
+                to
+            );
+
+            // 4. Сумуємо тільки невиконані витрати
+            var futureExpenses = plannedItems
+                .Where(p => string.IsNullOrEmpty(p.LinkedTransactionId)) // Тільки невиконані
+                .Where(p => p.Amount < 0) // Тільки витрати
+                .Sum(p => Math.Abs(p.Amount));
+
+            return futureExpenses;
+        }{
         public string AccountNumber { get; set; } = string.Empty;
         public int TotalTransactions { get; set; }
         public decimal TotalDebit { get; set; }
@@ -487,7 +516,6 @@ namespace doc_bursa.Services
     public enum TrendGranularity
     {
 
-                return futureExpenses;
         Daily,
         Weekly,
         Monthly
