@@ -14,6 +14,7 @@ namespace doc_bursa.Models
         public bool IsEnabled { get; set; }
         public DateTime? LastSync { get; set; }
         public string PingStatus { get; set; } = string.Empty;
+                public string Provider { get; set; } = string.Empty;
         public List<DiscoveredAccount> DiscoveredAccounts { get; set; } = new();
     }
 }
