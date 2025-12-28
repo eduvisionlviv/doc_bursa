@@ -88,4 +88,14 @@ namespace doc_bursa.Models
         /// </summary>
         public ObservableCollection<Transaction> Children { get; set; } = new();
     }
+
+        /// <summary>
+    /// Статус переказу між власними рахунками.
+    /// </summary>
+    public string? TransferStatus { get; set; }
+
+    /// <summary>
+    /// Комісія за переказ між власними рахунками.
+    /// </summary>
+    public decimal? TransferCommission { get; set; }
 }
