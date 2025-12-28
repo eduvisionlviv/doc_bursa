@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Http;
 using System.Threading.Tasks;
 using doc_bursa.Models;
@@ -17,6 +18,9 @@ namespace doc_bursa.Services
             .Handle<HttpRequestException>()
             .OrResult(response => !response.IsSuccessStatusCode)
             .WaitAndRetryAsync(3, attempt => TimeSpan.FromSeconds(Math.Pow(2, attempt)));
+
+        private static readonly Dictionary<string, (DateTime expiresAt, List<DiscoveredAccount> accounts)> DiscoveryCache = new();
+        private static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(30);
 
         public async Task<List<Transaction>> GetTransactionsAsync(string token, string clientId, DateTime from, DateTime to)
         {
@@ -119,12 +123,13 @@ namespace doc_bursa.Services
 
             try
             {
+                using var client = new HttpClient();
                 var request = new HttpRequestMessage(HttpMethod.Get, $"{BaseUrl}/personal/client-info");
                 request.Headers.Add("token", token);
                 request.Headers.Add("clientId", clientId ?? string.Empty);
                 request.Headers.Add("User-Agent", "FinDesk Client");
 
-                var response = await HttpClient.SendAsync(request);
+                var response = await client.SendAsync(request);
                 var accounts = new List<DiscoveredAccount>();
 
                 if (response.IsSuccessStatusCode)
