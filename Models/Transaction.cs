@@ -44,12 +44,12 @@ namespace doc_bursa.Models
         [MaxLength(120)]
         public string Account { get; set; } = string.Empty;
 
-                public int AccountId { get; set; }
+        public int AccountId { get; set; }
 
         [MaxLength(10)]
         public string Currency { get; set; } = "UAH";
 
-                public bool IsTransfer { get; set; }
+        public bool IsTransfer { get; set; }
 
         [MaxLength(256)]
         public string Counterparty { get; set; } = string.Empty;
@@ -87,15 +87,15 @@ namespace doc_bursa.Models
         /// Дерево дочірніх транзакцій для відображення у UI.
         /// </summary>
         public ObservableCollection<Transaction> Children { get; set; } = new();
-    }
 
         /// <summary>
-    /// Статус переказу між власними рахунками.
-    /// </summary>
-    public string? TransferStatus { get; set; }
+        /// Статус переказу між власними рахунками.
+        /// </summary>
+        public string? TransferStatus { get; set; }
 
-    /// <summary>
-    /// Комісія за переказ між власними рахунками.
-    /// </summary>
-    public decimal? TransferCommission { get; set; }
+        /// <summary>
+        /// Комісія за переказ між власними рахунками.
+        /// </summary>
+        public decimal? TransferCommission { get; set; }
+    }
 }
