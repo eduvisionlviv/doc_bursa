@@ -14,8 +14,13 @@ using Serilog;
 
 namespace doc_bursa.ViewModels
 {
-    public partial class SourcesViewModel : ObservableObject
-    {
+    // Додаємо пропущений тип
+    public enum ImportGroup { Api, File, Manual }
+
+
+        public partial class SourcesViewModel : ViewModelBase
+
+{
         private readonly DatabaseService _db;
         private readonly TransactionService _transactionService;
         private readonly CsvImportService _csvImport;
@@ -26,6 +31,21 @@ namespace doc_bursa.ViewModels
 
         [ObservableProperty]
         private ObservableCollection<DataSource> sources = new();
+
+                [ObservableProperty]
+        private ObservableCollection<AccountGroup> _accountGroups = new();
+
+        [ObservableProperty]
+        private ImportGroup _selectedImportGroup;
+
+        [ObservableProperty]
+        private bool _isMappingAccounts;
+
+        [ObservableProperty]
+        private DataSource _mappingSource;
+
+        [ObservableProperty]
+        private ObservableCollection<DiscoveredAccount> _discoveredAccounts = new();
 
         [ObservableProperty]
         private DataSource? selectedSource; // Для редагування
