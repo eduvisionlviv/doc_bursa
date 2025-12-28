@@ -19,6 +19,7 @@ namespace doc_bursa.Services
         private readonly CategorizationService _categorization;
         private readonly ILogger _logger;
         private readonly CsvRowValidator _validator;
+        private string _defaultAccountName = string.Empty;
         private static readonly Encoding[] _candidateEncodings =
         {
             new UTF8Encoding(false, true),
@@ -90,10 +91,13 @@ namespace doc_bursa.Services
             string filePath,
             string? bankType = null,
             IProgress<int>? progress = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            int? accountGroupId = null,
+            string? virtualAccountName = null)
         {
             try
             {
+                _defaultAccountName = _db.EnsureVirtualAccountForGroup(accountGroupId, virtualAccountName);
                 var usedEncoding = DetectEncodingWithFallback(filePath);
                 using var reader = new StreamReader(filePath, usedEncoding, detectEncodingFromByteOrderMarks: true);
 
@@ -346,7 +350,7 @@ namespace doc_bursa.Services
                 return false;
             }
 
-            if (!decimal.TryParse(mapped.Amount, NumberStyles.Any, CultureInfo.InvariantCulture, out var amount))
+            if (!NormalizationHelper.TryNormalizeAmount(mapped.Amount, mapped.Currency, out var amount, out var currency))
             {
                 error = $"Неправильна сума: {mapped.Amount}";
                 return false;
@@ -355,14 +359,20 @@ namespace doc_bursa.Services
             transaction.Date = parsedDate;
             transaction.Description = mapped.Description;
             transaction.Amount = amount;
-            transaction.Account = mapped.Account ?? string.Empty;
+            transaction.Account = string.IsNullOrWhiteSpace(mapped.Account)
+                ? _defaultAccountName
+                : mapped.Account;
             transaction.Balance = mapped.Balance ?? 0m;
-            transaction.Source = mapped.Source ?? format.ToString();
-            transaction.Category = !string.IsNullOrWhiteSpace(mapped.Category)
-                ? mapped.Category
-                : _categorization.CategorizeTransaction(transaction);
+            transaction.Source = string.IsNullOrWhiteSpace(mapped.Source) ? format.ToString() : mapped.Source;
+            transaction.Category = mapped.Category ?? string.Empty;
             transaction.TransactionId = mapped.TransactionId ?? $"{transaction.Source}-{transaction.Date:yyyyMMdd}-{Math.Abs(transaction.Description.GetHashCode())}";
             transaction.Hash = mapped.Hash ?? string.Empty;
+
+            NormalizationHelper.NormalizeTransaction(transaction, currency);
+            if (string.IsNullOrWhiteSpace(transaction.Category))
+            {
+                transaction.Category = _categorization.CategorizeTransaction(transaction);
+            }
 
             error = string.Empty;
             return true;
