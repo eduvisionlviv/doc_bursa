@@ -198,7 +198,7 @@ namespace doc_bursa.Services
         await _databaseService.SaveTransactionsAsync(batch);
         
         _logger.Information("Transaction {Tid} split into {Count} parts", parent.TransactionId, children.Count);
-    }}
+    }
 
         public Transaction CreateChildTransaction(Transaction parent)
         {
