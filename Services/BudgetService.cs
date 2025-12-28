@@ -1,9 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using doc_bursa.Models;
+using Microsoft.Data.Sqlite;
 using Serilog;
 
 namespace doc_bursa.Services
@@ -26,14 +26,31 @@ namespace doc_bursa.Services
         /// <summary>
         /// Створити планову транзакцію.
         /// </summary>
-        public async Task<PlannedTransaction> CreatePlannedTransactionAsync(
-            PlannedTransaction plannedTransaction, CancellationToken ct = default)
+        public PlannedTransaction CreatePlannedTransaction(PlannedTransaction plannedTransaction)
         {
-            using var db = _databaseService.CreateDbContext();
-            db.PlannedTransactions.Add(plannedTransaction);
-            await db.SaveChangesAsync(ct);
-            _logger.Information("Created planned transaction {Id}", plannedTransaction.Id);
-            return plannedTransaction;
+            try
+            {
+                _databaseService.ExecuteNonQuery(
+                    @"INSERT INTO PlannedTransactions (AccountNumber, PlannedDate, Amount, Description, Category, IsExecuted, ActualTransactionId)
+                      VALUES (@accountNumber, @plannedDate, @amount, @description, @category, @isExecuted, @actualTransactionId)",
+                    new SqliteParameter("@accountNumber", plannedTransaction.AccountNumber),
+                    new SqliteParameter("@plannedDate", plannedTransaction.PlannedDate),
+                    new SqliteParameter("@amount", plannedTransaction.Amount),
+                    new SqliteParameter("@description", plannedTransaction.Description ?? (object)DBNull.Value),
+                    new SqliteParameter("@category", plannedTransaction.Category ?? (object)DBNull.Value),
+                    new SqliteParameter("@isExecuted", plannedTransaction.IsExecuted ? 1 : 0),
+                    new SqliteParameter("@actualTransactionId", plannedTransaction.ActualTransactionId ?? (object)DBNull.Value)
+                );
+
+                plannedTransaction.Id = (int)_databaseService.ExecuteScalar("SELECT last_insert_rowid()");
+                _logger.Information("Created planned transaction {Id}", plannedTransaction.Id);
+                return plannedTransaction;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error creating planned transaction");
+                throw;
+            }
         }
 
         /// <summary>
@@ -41,52 +58,78 @@ namespace doc_bursa.Services
         /// </summary>
         public List<PlannedTransaction> GetPlannedTransactions(string accountNumber)
         {
-            using var db = _databaseService.CreateDbContext();
-            return db.PlannedTransactions
-                .Where(pt => pt.AccountNumber == accountNumber && !pt.IsExecuted)
-                .OrderBy(pt => pt.PlannedDate)
-                .ToList();
+            var transactions = new List<PlannedTransaction>();
+            var table = _databaseService.ExecuteQuery(
+                "SELECT * FROM PlannedTransactions WHERE AccountNumber = @accountNumber AND IsExecuted = 0 ORDER BY PlannedDate",
+                new SqliteParameter("@accountNumber", accountNumber)
+            );
+
+            foreach (DataRow row in table.Rows)
+            {
+                transactions.Add(MapToPlannedTransaction(row));
+            }
+
+            return transactions;
         }
 
         /// <summary>
         /// Позначити планову транзакцію як виконану.
         /// </summary>
-        public async Task MarkAsExecutedAsync(int plannedTransactionId, int actualTransactionId, CancellationToken ct = default)
+        public void MarkAsExecuted(int plannedTransactionId, int actualTransactionId)
         {
-            using var db = _databaseService.CreateDbContext();
-            var planned = db.PlannedTransactions.FirstOrDefault(pt => pt.Id == plannedTransactionId);
-            if (planned != null)
+            try
             {
-                planned.IsExecuted = true;
-                planned.ActualTransactionId = actualTransactionId;
-                await db.SaveChangesAsync(ct);
+                _databaseService.ExecuteNonQuery(
+                    "UPDATE PlannedTransactions SET IsExecuted = 1, ActualTransactionId = @actualTransactionId WHERE Id = @id",
+                    new SqliteParameter("@actualTransactionId", actualTransactionId),
+                    new SqliteParameter("@id", plannedTransactionId)
+                );
                 _logger.Information("Marked planned transaction {Id} as executed", plannedTransactionId);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error marking planned transaction as executed");
+                throw;
             }
         }
 
         /// <summary>
-        /// Розрахувати "Вільні кошти" (Free Cash) для рахунку.
+        /// Розрахувати \"Вільні кошти\" (Free Cash) для рахунку.
         /// Free Cash = Поточний Баланс - Сума Планових Витрат (до кінця періоду).
         /// </summary>
         public decimal CalculateFreeCash(string accountNumber, DateTime endDate)
         {
-            using var db = _databaseService.CreateDbContext();
+            try
+            {
+                var balance = _databaseService.ExecuteScalar(
+                    "SELECT Balance FROM Accounts WHERE AccountNumber = @accountNumber",
+                    new SqliteParameter("@accountNumber", accountNumber)
+                );
 
-            // Поточний баланс
-            var account = db.Accounts.FirstOrDefault(a => a.AccountNumber == accountNumber);
-            if (account == null) return 0m;
+                if (balance == null || balance == DBNull.Value)
+                    return 0m;
 
-            var currentBalance = account.Balance;
+                var currentBalance = Convert.ToDecimal(balance);
 
-            // Сума планових витрат до endDate
-            var plannedExpenses = db.PlannedTransactions
-                .Where(pt => pt.AccountNumber == accountNumber
-                             && !pt.IsExecuted
-                             && pt.PlannedDate <= endDate
-                             && pt.Amount < 0)
-                .Sum(pt => pt.Amount);
+                var plannedExpenses = _databaseService.ExecuteScalar(
+                    @"SELECT COALESCE(SUM(Amount), 0) FROM PlannedTransactions 
+                      WHERE AccountNumber = @accountNumber AND IsExecuted = 0 
+                      AND PlannedDate <= @endDate AND Amount < 0",
+                    new SqliteParameter("@accountNumber", accountNumber),
+                    new SqliteParameter("@endDate", endDate)
+                );
 
-            return currentBalance + plannedExpenses; // plannedExpenses вже негативна
+                var expenses = plannedExpenses != null && plannedExpenses != DBNull.Value
+                    ? Convert.ToDecimal(plannedExpenses)
+                    : 0m;
+
+                return currentBalance + expenses;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error calculating free cash");
+                throw;
+            }
         }
 
         /// <summary>
@@ -95,28 +138,59 @@ namespace doc_bursa.Services
         public List<PlannedTransaction> GetPlannedTransactionsByDateRange(
             string accountNumber, DateTime startDate, DateTime endDate)
         {
-            using var db = _databaseService.CreateDbContext();
-            return db.PlannedTransactions
-                .Where(pt => pt.AccountNumber == accountNumber
-                             && pt.PlannedDate >= startDate
-                             && pt.PlannedDate <= endDate)
-                .OrderBy(pt => pt.PlannedDate)
-                .ToList();
+            var transactions = new List<PlannedTransaction>();
+            var table = _databaseService.ExecuteQuery(
+                @"SELECT * FROM PlannedTransactions 
+                  WHERE AccountNumber = @accountNumber 
+                  AND PlannedDate >= @startDate 
+                  AND PlannedDate <= @endDate 
+                  ORDER BY PlannedDate",
+                new SqliteParameter("@accountNumber", accountNumber),
+                new SqliteParameter("@startDate", startDate),
+                new SqliteParameter("@endDate", endDate)
+            );
+
+            foreach (DataRow row in table.Rows)
+            {
+                transactions.Add(MapToPlannedTransaction(row));
+            }
+
+            return transactions;
         }
 
         /// <summary>
         /// Видалити планову транзакцію.
         /// </summary>
-        public async Task DeletePlannedTransactionAsync(int plannedTransactionId, CancellationToken ct = default)
+        public void DeletePlannedTransaction(int plannedTransactionId)
         {
-            using var db = _databaseService.CreateDbContext();
-            var planned = db.PlannedTransactions.FirstOrDefault(pt => pt.Id == plannedTransactionId);
-            if (planned != null)
+            try
             {
-                db.PlannedTransactions.Remove(planned);
-                await db.SaveChangesAsync(ct);
+                _databaseService.ExecuteNonQuery(
+                    "DELETE FROM PlannedTransactions WHERE Id = @id",
+                    new SqliteParameter("@id", plannedTransactionId)
+                );
                 _logger.Information("Deleted planned transaction {Id}", plannedTransactionId);
             }
+            catch (Exception ex)
+            {
+                _logger.Error(ex, "Error deleting planned transaction");
+                throw;
+            }
+        }
+
+        private PlannedTransaction MapToPlannedTransaction(DataRow row)
+        {
+            return new PlannedTransaction
+            {
+                Id = Convert.ToInt32(row["Id"]),
+                AccountNumber = row["AccountNumber"].ToString(),
+                PlannedDate = Convert.ToDateTime(row["PlannedDate"]),
+                Amount = Convert.ToDecimal(row["Amount"]),
+                Description = row["Description"] != DBNull.Value ? row["Description"].ToString() : null,
+                Category = row["Category"] != DBNull.Value ? row["Category"].ToString() : null,
+                IsExecuted = Convert.ToBoolean(row["IsExecuted"]),
+                ActualTransactionId = row["ActualTransactionId"] != DBNull.Value ? Convert.ToInt32(row["ActualTransactionId"]) : null
+            };
         }
     }
 }
