@@ -44,6 +44,11 @@ namespace doc_bursa.Models
         [MaxLength(120)]
         public string Account { get; set; } = string.Empty;
 
+                public int AccountId { get; set; }
+
+        [MaxLength(10)]
+        public string Currency { get; set; } = "UAH";
+
         [MaxLength(256)]
         public string Counterparty { get; set; } = string.Empty;
 
