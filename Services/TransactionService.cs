@@ -144,5 +144,33 @@ namespace doc_bursa.Services
 
             return transaction;
         }
+
+                // Методи для Split (заглушки для компіляції)
+        public void ValidateSplitTotals(Transaction parent, IEnumerable<Transaction> children)
+        {
+            if (children == null) return;
+            decimal total = children.Sum(x => x.Amount);
+            if (Math.Abs(parent.Amount - total) > 0.01m)
+            {
+                throw new InvalidOperationException("Сума частин не збігається з сумою транзакції.");
+            }
+        }
+
+        public async Task ApplySplit(Transaction parent, List<Transaction> children)
+        {
+            // Тут має бути логіка збереження в БД
+            await Task.CompletedTask; 
+        }
+
+        public Transaction CreateChildTransaction(Transaction parent)
+        {
+            return new Transaction
+            {
+                Date = parent.Date,
+                AccountId = parent.AccountId,
+                Currency = parent.Currency,
+                // Копіюємо інші потрібні поля
+            };
+        }
     }
 }
