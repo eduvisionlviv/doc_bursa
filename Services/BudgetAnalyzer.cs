@@ -142,7 +142,7 @@ namespace doc_bursa.Services
 
         private IEnumerable<Transaction> FilterTransactions(DateTime from, DateTime to)
         {
-            var transactions = _transactionService.GetTransactions()
+            var transactions = _transactionService.GetEffectiveTransactions()
                 .Where(t => t.Date >= from && t.Date <= to)
                 .ToList();
 
@@ -233,4 +233,3 @@ namespace doc_bursa.Services
         }
     }
 }
-

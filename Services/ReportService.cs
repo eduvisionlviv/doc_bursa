@@ -258,7 +258,7 @@ namespace doc_bursa.Services
 
         private List<Transaction> FilterTransactions(DateTime? from, DateTime? to, string? category, string? account)
         {
-            var transactions = _transactionService.GetTransactions();
+            var transactions = _transactionService.GetEffectiveTransactions();
 
             if (from.HasValue)
             {
@@ -284,4 +284,3 @@ namespace doc_bursa.Services
         }
     }
 }
-

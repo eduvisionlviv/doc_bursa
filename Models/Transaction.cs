@@ -1,4 +1,5 @@
 using System;
+using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 
 namespace doc_bursa.Models
@@ -63,5 +64,21 @@ namespace doc_bursa.Models
         /// </summary>
         [MaxLength(128)]
         public string OriginalTransactionId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Посилання на батьківську транзакцію у разі спліту.
+        /// </summary>
+        [MaxLength(128)]
+        public string ParentTransactionId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Позначка, що транзакція була розбита на дочірні.
+        /// </summary>
+        public bool IsSplit { get; set; }
+
+        /// <summary>
+        /// Дерево дочірніх транзакцій для відображення у UI.
+        /// </summary>
+        public ObservableCollection<Transaction> Children { get; set; } = new();
     }
 }
