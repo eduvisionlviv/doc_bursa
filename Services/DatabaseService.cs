@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using doc_bursa.Models;
 using Microsoft.Data.Sqlite;
+using System.Text.Json;
 using Serilog;
 
 namespace doc_bursa.Services
@@ -59,7 +60,9 @@ namespace doc_bursa.Services
                     ClientId TEXT,
                     ClientSecret TEXT,
                     IsEnabled INTEGER,
-                    LastSync TEXT
+                    LastSync TEXT,
+                    PingStatus TEXT,
+                    DiscoveredAccounts TEXT
                 );
 
                 CREATE TABLE IF NOT EXISTS CategoryRules (
@@ -102,6 +105,7 @@ namespace doc_bursa.Services
             command.ExecuteNonQuery();
 
             EnsureTransactionColumns(connection);
+            EnsureDataSourceColumns(connection);
             EnsureBudgetTable(connection);
             EnsureRecurringTransactionsTable(connection);
         }
@@ -136,6 +140,35 @@ namespace doc_bursa.Services
             AddColumnIfMissing("IsDuplicate", "INTEGER DEFAULT 0");
             AddColumnIfMissing("OriginalTransactionId", "TEXT");
             AddColumnIfMissing("Counterparty", "TEXT");
+        }
+
+        private static void EnsureDataSourceColumns(SqliteConnection connection)
+        {
+            var existingColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using var pragma = connection.CreateCommand();
+            pragma.CommandText = "PRAGMA table_info(DataSources)";
+            using (var reader = pragma.ExecuteReader())
+            {
+                while (reader.Read())
+                {
+                    existingColumns.Add(reader.GetString(1));
+                }
+            }
+
+            void AddColumn(string column, string definition)
+            {
+                if (existingColumns.Contains(column))
+                {
+                    return;
+                }
+
+                var alter = connection.CreateCommand();
+                alter.CommandText = $"ALTER TABLE DataSources ADD COLUMN {column} {definition}";
+                alter.ExecuteNonQuery();
+            }
+
+            AddColumn("PingStatus", "TEXT");
+            AddColumn("DiscoveredAccounts", "TEXT");
         }
 
         private static void EnsureBudgetTable(SqliteConnection connection)
@@ -710,8 +743,8 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT INTO DataSources 
-                (Name, Type, ApiToken, ClientId, ClientSecret, IsEnabled, LastSync)
-                VALUES ($name, $type, $token, $cid, $secret, $enabled, $sync)
+                (Name, Type, ApiToken, ClientId, ClientSecret, IsEnabled, LastSync, PingStatus, DiscoveredAccounts)
+                VALUES ($name, $type, $token, $cid, $secret, $enabled, $sync, $ping, $discovered)
             ";
 
             command.Parameters.AddWithValue("$name", source.Name);
@@ -721,6 +754,8 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
+            command.Parameters.AddWithValue("$ping", source.PingStatus ?? string.Empty);
+            command.Parameters.AddWithValue("$discovered", SerializeAccounts(source.DiscoveredAccounts));
             command.ExecuteNonQuery();
         }
 
@@ -734,8 +769,8 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT INTO DataSources 
-                (Name, Type, ApiToken, ClientId, ClientSecret, IsEnabled, LastSync)
-                VALUES ($name, $type, $token, $cid, $secret, $enabled, $sync)
+                (Name, Type, ApiToken, ClientId, ClientSecret, IsEnabled, LastSync, PingStatus, DiscoveredAccounts)
+                VALUES ($name, $type, $token, $cid, $secret, $enabled, $sync, $ping, $discovered)
             ";
 
             command.Parameters.AddWithValue("$name", source.Name);
@@ -745,6 +780,8 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
+            command.Parameters.AddWithValue("$ping", source.PingStatus ?? string.Empty);
+            command.Parameters.AddWithValue("$discovered", SerializeAccounts(source.DiscoveredAccounts));
 
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -760,7 +797,8 @@ namespace doc_bursa.Services
             command.CommandText = @"
                 UPDATE DataSources 
                 SET Name = $name, Type = $type, ApiToken = $token, ClientId = $cid, 
-                    ClientSecret = $secret, IsEnabled = $enabled, LastSync = $sync
+                    ClientSecret = $secret, IsEnabled = $enabled, LastSync = $sync, 
+                    PingStatus = $ping, DiscoveredAccounts = $discovered
                 WHERE Id = $id
             ";
 
@@ -772,6 +810,8 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.Parameters.AddWithValue("$id", source.Id);
+            command.Parameters.AddWithValue("$ping", source.PingStatus ?? string.Empty);
+            command.Parameters.AddWithValue("$discovered", SerializeAccounts(source.DiscoveredAccounts));
 
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
@@ -799,7 +839,8 @@ namespace doc_bursa.Services
             command.CommandText = @"
                 UPDATE DataSources 
                 SET Name = $name, Type = $type, ApiToken = $token, ClientId = $cid, 
-                    ClientSecret = $secret, IsEnabled = $enabled, LastSync = $sync
+                    ClientSecret = $secret, IsEnabled = $enabled, LastSync = $sync, 
+                    PingStatus = $ping, DiscoveredAccounts = $discovered
                 WHERE Id = $id
             ";
 
@@ -811,6 +852,8 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.Parameters.AddWithValue("$id", source.Id);
+            command.Parameters.AddWithValue("$ping", source.PingStatus ?? string.Empty);
+            command.Parameters.AddWithValue("$discovered", SerializeAccounts(source.DiscoveredAccounts));
             command.ExecuteNonQuery();
         }
 
@@ -865,6 +908,9 @@ namespace doc_bursa.Services
 
         private static DataSource ReadDataSource(SqliteDataReader reader)
         {
+            var lastSyncRaw = reader.IsDBNull(7) ? string.Empty : reader.GetString(7);
+            var pingStatus = reader.FieldCount > 8 && !reader.IsDBNull(8) ? reader.GetString(8) : string.Empty;
+            var discoveredRaw = reader.FieldCount > 9 && !reader.IsDBNull(9) ? reader.GetString(9) : string.Empty;
             return new DataSource
             {
                 Id = reader.GetInt32(0),
@@ -874,8 +920,39 @@ namespace doc_bursa.Services
                 ClientId = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
                 ClientSecret = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
                 IsEnabled = reader.GetInt32(6) == 1,
-                LastSync = string.IsNullOrEmpty(reader.GetString(7)) ? null : DateTime.Parse(reader.GetString(7))
+                LastSync = string.IsNullOrEmpty(lastSyncRaw) ? null : DateTime.Parse(lastSyncRaw),
+                PingStatus = pingStatus,
+                DiscoveredAccounts = DeserializeAccounts(discoveredRaw)
             };
+        }
+
+        private static string SerializeAccounts(List<DiscoveredAccount> accounts)
+        {
+            try
+            {
+                return JsonSerializer.Serialize(accounts ?? new List<DiscoveredAccount>());
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static List<DiscoveredAccount> DeserializeAccounts(string raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return new List<DiscoveredAccount>();
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<List<DiscoveredAccount>>(raw) ?? new List<DiscoveredAccount>();
+            }
+            catch
+            {
+                return new List<DiscoveredAccount>();
+            }
         }
 
         // Category Rules
@@ -998,5 +1075,27 @@ namespace doc_bursa.Services
 
         public Task DeleteMasterGroupAsync(int id, CancellationToken cancellationToken = default)
             => Task.Run(() => DeleteMasterGroup(id), cancellationToken);
+
+        public string EnsureVirtualAccountForGroup(int? groupId, string? preferredName = null)
+        {
+            if (!groupId.HasValue)
+            {
+                return preferredName ?? string.Empty;
+            }
+
+            var accountNumber = string.IsNullOrWhiteSpace(preferredName)
+                ? $"virtual-group-{groupId.Value}"
+                : preferredName;
+
+            var groups = GetMasterGroups();
+            var targetGroup = groups.FirstOrDefault(g => g.Id == groupId.Value);
+            if (targetGroup != null && !targetGroup.AccountNumbers.Contains(accountNumber))
+            {
+                targetGroup.AccountNumbers.Add(accountNumber);
+                SaveMasterGroup(targetGroup);
+            }
+
+            return accountNumber;
+        }
     }
 }

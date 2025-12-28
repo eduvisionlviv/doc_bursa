@@ -19,6 +19,7 @@ namespace doc_bursa.Services
         private readonly CategorizationService _categorization;
         private readonly ILogger _logger;
         private readonly CsvRowValidator _validator;
+        private string _defaultAccountName = string.Empty;
         private static readonly Encoding[] _candidateEncodings =
         {
             new UTF8Encoding(false, true),
@@ -90,10 +91,13 @@ namespace doc_bursa.Services
             string filePath,
             string? bankType = null,
             IProgress<int>? progress = null,
-            CancellationToken cancellationToken = default)
+            CancellationToken cancellationToken = default,
+            int? accountGroupId = null,
+            string? virtualAccountName = null)
         {
             try
             {
+                _defaultAccountName = _db.EnsureVirtualAccountForGroup(accountGroupId, virtualAccountName);
                 var usedEncoding = DetectEncodingWithFallback(filePath);
                 using var reader = new StreamReader(filePath, usedEncoding, detectEncodingFromByteOrderMarks: true);
 
@@ -355,7 +359,9 @@ namespace doc_bursa.Services
             transaction.Date = parsedDate;
             transaction.Description = mapped.Description;
             transaction.Amount = amount;
-            transaction.Account = mapped.Account ?? string.Empty;
+            transaction.Account = string.IsNullOrWhiteSpace(mapped.Account)
+                ? _defaultAccountName
+                : mapped.Account;
             transaction.Balance = mapped.Balance ?? 0m;
             transaction.Source = mapped.Source ?? format.ToString();
             transaction.Category = !string.IsNullOrWhiteSpace(mapped.Category)

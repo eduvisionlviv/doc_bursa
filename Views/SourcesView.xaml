@@ -25,6 +25,13 @@
                         Style="{StaticResource NavButtonStyle}" Margin="10,0,0,0" Background="#2C3E50"/>
                 <Button Content="Імпорт Excel" Command="{Binding ImportExcelCommand}" 
                         Style="{StaticResource NavButtonStyle}" Margin="10,0,0,0" Background="#27AE60"/>
+                <StackPanel Orientation="Horizontal" Margin="20,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="Група для імпорту:" Foreground="White" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <ComboBox ItemsSource="{Binding AccountGroups}" 
+                              SelectedItem="{Binding SelectedImportGroup}"
+                              DisplayMemberPath="Name"
+                              Padding="6" Width="180"/>
+                </StackPanel>
             </StackPanel>
 
             <ScrollViewer Grid.Row="1">
@@ -54,11 +61,16 @@
                                                 Command="{Binding DataContext.SyncSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}" 
                                                 CommandParameter="{Binding}"
                                                 Style="{StaticResource NavButtonStyle}" Margin="0,0,5,0"/>
-                                        
+
                                         <Button Content="✏️" ToolTip="Редагувати"
                                                 Command="{Binding DataContext.StartEditSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                 CommandParameter="{Binding}"
                                                 Style="{StaticResource NavButtonStyle}" Background="#F39C12" Foreground="White" Margin="0,0,5,0"/>
+
+                                        <Button Content="🔗" ToolTip="Мапінг рахунків"
+                                                Command="{Binding DataContext.MapAccountsCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                CommandParameter="{Binding}"
+                                                Style="{StaticResource NavButtonStyle}" Background="#8E44AD" Foreground="White" Margin="0,0,5,0"/>
 
                                         <Button Content="🗑️" ToolTip="Видалити"
                                                 Command="{Binding DataContext.DeleteSourceCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -100,6 +112,45 @@
                     <Button Content="Скасувати" Command="{Binding CancelAddCommand}" 
                             Style="{StaticResource NavButtonStyle}" Margin="0,0,10,0"/>
                     <Button Content="Зберегти" Command="{Binding SaveSourceCommand}" 
+                            Style="{StaticResource SuccessButtonStyle}"/>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <Border Background="#1F2937" CornerRadius="8" Padding="30" VerticalAlignment="Center" HorizontalAlignment="Center"
+                Visibility="{Binding IsMappingAccounts, Converter={StaticResource BoolToVis}}" Width="600">
+            <StackPanel>
+                <TextBlock Text="Мапінг рахунків" FontSize="20" FontWeight="Bold" Foreground="White" Margin="0,0,0,20"/>
+                <TextBlock Text="{Binding MappingSource.Name, StringFormat='Джерело: {0}'}" Foreground="#B0BEC5" Margin="0,0,0,10"/>
+
+                <ItemsControl ItemsSource="{Binding DiscoveredAccounts}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,0,0,10">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="2*"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel>
+                                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" Foreground="White"/>
+                                    <TextBlock Text="{Binding Iban, StringFormat='IBAN: {0}'}" Foreground="#B0BEC5" FontSize="12"/>
+                                    <TextBlock Text="{Binding Currency, StringFormat='Валюта: {0}'}" Foreground="#B0BEC5" FontSize="12"/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1"
+                                          ItemsSource="{Binding DataContext.AccountGroups, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                          SelectedValuePath="Id"
+                                          DisplayMemberPath="Name"
+                                          SelectedValue="{Binding AccountGroupId, Mode=TwoWay}"
+                                          Padding="6"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,10,0,0">
+                    <Button Content="Скасувати" Command="{Binding CancelMappingCommand}" 
+                            Style="{StaticResource NavButtonStyle}" Margin="0,0,10,0"/>
+                    <Button Content="Зберегти" Command="{Binding SaveMappingsCommand}" 
                             Style="{StaticResource SuccessButtonStyle}"/>
                 </StackPanel>
             </StackPanel>

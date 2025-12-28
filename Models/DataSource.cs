@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 namespace doc_bursa.Models
 {
@@ -12,7 +13,7 @@ namespace doc_bursa.Models
         public string ClientSecret { get; set; } = string.Empty;
         public bool IsEnabled { get; set; }
         public DateTime? LastSync { get; set; }
+        public string PingStatus { get; set; } = string.Empty;
+        public List<DiscoveredAccount> DiscoveredAccounts { get; set; } = new();
     }
 }
-
-
