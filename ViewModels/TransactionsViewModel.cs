@@ -40,8 +40,8 @@ namespace doc_bursa.ViewModels
         {
             if (SelectedMasterGroup == null) return;
 
-            // Завантажуємо транзакції
-            _allTransactions = new List<Transaction>(); 
+            // Завантажуємо транзакції з сервісу
+            _allTransactions = _transactionService.GetTransactions(null, null, null, null, SelectedMasterGroup.Id);
             
             ApplyFilter();
         }
@@ -54,8 +54,9 @@ namespace doc_bursa.ViewModels
 
             if (SelectedMasterGroup != null)
             {
-                // Фільтрація по MasterGroup
-                query = query.Where(t => t.Account?.AccountGroup?.MasterGroupId == SelectedMasterGroup.Id);
+                // Фільтрація по рахунках вибраної майстер-групи
+                var groupAccounts = new HashSet<string>(SelectedMasterGroup.AccountNumbers);
+                query = query.Where(t => t.Account != null && groupAccounts.Contains(t.Account));
             }
 
             Transactions = new ObservableCollection<Transaction>(query);
