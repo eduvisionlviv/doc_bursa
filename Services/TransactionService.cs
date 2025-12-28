@@ -16,30 +16,38 @@ namespace doc_bursa.Services
         private const decimal SplitTolerance = 0.01m;
         private readonly DatabaseService _databaseService;
         private readonly DeduplicationService _deduplicationService;
-        private readonly ILogger _logger = Log.ForContext<TransactionService>();
+        private readonly CategorizationService _categorizationService;
+        private readonly ILogger _logger;
 
-        public TransactionService(DatabaseService databaseService, DeduplicationService deduplicationService)
+        public TransactionService(
+            DatabaseService databaseService,
+            DeduplicationService deduplicationService,
+            CategorizationService categorizationService)
         {
             _databaseService = databaseService;
             _deduplicationService = deduplicationService;
+            _categorizationService = categorizationService;
+            _logger = Log.ForContext<TransactionService>();
         }
 
         public bool AddTransaction(Transaction transaction)
         {
-            // prevent unique constraint failures
-            if (_databaseService.GetTransactionByTransactionId(transaction.TransactionId) != null)
+            var prepared = PrepareTransaction(transaction);
+
+            if (_databaseService.GetTransactionByTransactionId(prepared.TransactionId) != null)
             {
                 return false;
             }
 
-            _deduplicationService.DetectDuplicate(transaction);
-            _databaseService.SaveTransaction(transaction);
+            _deduplicationService.DetectDuplicate(prepared);
+            _databaseService.SaveTransaction(prepared);
+            _logger.Information("Transaction added: {TransactionId} ({Source})", prepared.TransactionId, prepared.Source);
             return true;
         }
 
-        public List<Transaction> GetTransactions()
+        public List<Transaction> GetTransactions(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, int? masterGroupId = null)
         {
-            return _databaseService.GetTransactions();
+            return _databaseService.GetTransactions(from, to, category, account, masterGroupId);
         }
 
         public List<Transaction> GetTransactionTree()
@@ -100,18 +108,20 @@ namespace doc_bursa.Services
                         break;
                     }
 
-                    if (_databaseService.GetTransactionByTransactionId(transaction.TransactionId) != null)
+                    var normalized = PrepareTransaction(transaction);
+                    if (_databaseService.GetTransactionByTransactionId(normalized.TransactionId) != null)
                     {
                         continue;
                     }
 
-                    _deduplicationService.DetectDuplicate(transaction);
-                    prepared.Add(transaction);
+                    _deduplicationService.DetectDuplicate(normalized);
+                    prepared.Add(normalized);
                 }
 
                 if (prepared.Count > 0)
                 {
                     _databaseService.SaveTransactions(prepared);
+                    _logger.Information("Batch import saved {Count} transactions", prepared.Count);
                 }
 
                 return prepared.Count;
@@ -124,99 +134,15 @@ namespace doc_bursa.Services
             return AddTransactionsBatchAsync(transactions, cancellationToken);
         }
 
-        public Transaction CreateChildTransaction(Transaction parent, decimal amount, string description, string? category = null, string? account = null)
+        private Transaction PrepareTransaction(Transaction transaction)
         {
-            if (parent == null)
+            NormalizationHelper.NormalizeTransaction(transaction);
+            if (string.IsNullOrWhiteSpace(transaction.Category))
             {
-                throw new ArgumentNullException(nameof(parent));
+                transaction.Category = _categorizationService.CategorizeTransaction(transaction);
             }
 
-            var child = new Transaction
-            {
-                TransactionId = $"{parent.TransactionId}-child-{Guid.NewGuid()}",
-                ParentTransactionId = parent.TransactionId,
-                Date = parent.Date,
-                Amount = amount,
-                Description = string.IsNullOrWhiteSpace(description) ? parent.Description : description,
-                Category = string.IsNullOrWhiteSpace(category) ? parent.Category : category,
-                Source = parent.Source,
-                Counterparty = parent.Counterparty,
-                Account = string.IsNullOrWhiteSpace(account) ? parent.Account : account
-            };
-
-            _deduplicationService.DetectDuplicate(child);
-            return child;
-        }
-
-        public bool ValidateSplitTotals(Transaction parent, IEnumerable<Transaction> children, out decimal difference)
-        {
-            if (parent == null)
-            {
-                throw new ArgumentNullException(nameof(parent));
-            }
-
-            var total = children?.Sum(c => c.Amount) ?? 0;
-            difference = Math.Abs(total - parent.Amount);
-            return difference <= SplitTolerance;
-        }
-
-        public void ApplySplit(Transaction parent, IEnumerable<Transaction> children)
-        {
-            if (parent == null)
-            {
-                throw new ArgumentNullException(nameof(parent));
-            }
-
-            var childList = children?.ToList() ?? new List<Transaction>();
-            if (!ValidateSplitTotals(parent, childList, out var diff))
-            {
-                throw new InvalidOperationException($"Сума дочірніх транзакцій не відповідає батьківській (різниця {diff:N2}).");
-            }
-
-            _databaseService.DeleteChildTransactions(parent.TransactionId);
-            parent.IsSplit = true;
-            _databaseService.SaveTransaction(parent);
-
-            foreach (var child in childList)
-            {
-                child.ParentTransactionId = parent.TransactionId;
-                if (string.IsNullOrWhiteSpace(child.TransactionId))
-                {
-                    child.TransactionId = $"{parent.TransactionId}-child-{Guid.NewGuid()}";
-                }
-
-                _deduplicationService.DetectDuplicate(child);
-            }
-
-            if (childList.Count > 0)
-            {
-                _databaseService.SaveTransactions(childList);
-            }
-
-            _logger.Information("Applied split for {TransactionId} into {Count} children", parent.TransactionId, childList.Count);
-        }
-
-        private static List<Transaction> BuildHierarchy(List<Transaction> transactions)
-        {
-            foreach (var tx in transactions)
-            {
-                tx.Children.Clear();
-            }
-
-            var map = transactions.ToDictionary(t => t.TransactionId, StringComparer.OrdinalIgnoreCase);
-
-            foreach (var tx in transactions.Where(t => !string.IsNullOrWhiteSpace(t.ParentTransactionId)))
-            {
-                if (map.TryGetValue(tx.ParentTransactionId, out var parent))
-                {
-                    parent.Children.Add(tx);
-                }
-            }
-
-            return transactions
-                .Where(t => string.IsNullOrWhiteSpace(t.ParentTransactionId))
-                .OrderByDescending(t => t.Date)
-                .ToList();
+            return transaction;
         }
     }
 }

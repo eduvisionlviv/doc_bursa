@@ -43,7 +43,7 @@ namespace doc_bursa.Services
         private ReportResult BuildMonthlyIncomeExpense(ReportRequest request)
         {
             var (from, to) = NormalizeRange(request.From, request.To, DateTime.UtcNow.AddMonths(-1), DateTime.UtcNow);
-            var transactions = FilterTransactions(from, to, request.Category, request.Account);
+            var transactions = FilterTransactions(from, to, request.Category, request.Account, request.MasterGroupId, out var inTransitTotal);
 
             var rows = transactions
                 .GroupBy(t => new { t.Date.Year, t.Date.Month })
@@ -62,7 +62,8 @@ namespace doc_bursa.Services
                 Type = ReportType.MonthlyIncomeExpense,
                 Title = "Місячний звіт доходів/витрат",
                 From = from,
-                To = to
+                To = to,
+                MasterGroupId = request.MasterGroupId
             };
 
             foreach (var row in rows)
@@ -78,6 +79,7 @@ namespace doc_bursa.Services
             result.Metrics["Загальний дохід"] = rows.Sum(r => r.Income);
             result.Metrics["Загальні витрати"] = rows.Sum(r => r.Expense);
             result.Metrics["Сальдо"] = rows.Sum(r => r.Balance);
+            result.Metrics["В дорозі перекази"] = inTransitTotal;
 
             var chart = new ChartData { Title = "Доходи та витрати", Type = "column" };
             foreach (var row in rows)
@@ -93,7 +95,7 @@ namespace doc_bursa.Services
         private ReportResult BuildCategoryBreakdown(ReportRequest request)
         {
             var (from, to) = NormalizeRange(request.From, request.To, DateTime.UtcNow.AddMonths(-1), DateTime.UtcNow);
-            var transactions = FilterTransactions(from, to, request.Category, request.Account)
+            var transactions = FilterTransactions(from, to, request.Category, request.Account, request.MasterGroupId, out _)
                 .Where(t => t.Amount < 0)
                 .ToList();
 
@@ -108,7 +110,8 @@ namespace doc_bursa.Services
                 Type = ReportType.CategoryBreakdown,
                 Title = "Структура витрат за категоріями",
                 From = from,
-                To = to
+                To = to,
+                MasterGroupId = request.MasterGroupId
             };
 
             foreach (var group in grouped)
@@ -140,7 +143,8 @@ namespace doc_bursa.Services
                 Type = ReportType.BudgetPerformance,
                 Title = "Ефективність бюджетів",
                 From = request.From,
-                To = request.To
+                To = request.To,
+                MasterGroupId = request.MasterGroupId
             };
 
             foreach (var budget in budgets)
@@ -174,7 +178,7 @@ namespace doc_bursa.Services
             var now = DateTime.UtcNow;
             var yearStart = new DateTime(now.Year, 1, 1);
             var yearEnd = new DateTime(now.Year, 12, 31);
-            var transactions = FilterTransactions(yearStart, yearEnd, request.Category, request.Account);
+            var transactions = FilterTransactions(yearStart, yearEnd, request.Category, request.Account, request.MasterGroupId, out var inTransitTotal);
 
             var totalIncome = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
             var totalExpense = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));
@@ -189,12 +193,14 @@ namespace doc_bursa.Services
                 Type = ReportType.YearEndSummary,
                 Title = $"Підсумки року {now.Year}",
                 From = yearStart,
-                To = yearEnd
+                To = yearEnd,
+                MasterGroupId = request.MasterGroupId
             };
 
             result.Metrics["Дохід"] = totalIncome;
             result.Metrics["Витрати"] = totalExpense;
             result.Metrics["Баланс"] = totalIncome - totalExpense;
+            result.Metrics["В дорозі перекази"] = inTransitTotal;
 
             foreach (var month in months)
             {
@@ -218,14 +224,15 @@ namespace doc_bursa.Services
         private ReportResult BuildCustomRange(ReportRequest request)
         {
             var (from, to) = NormalizeRange(request.From, request.To, DateTime.UtcNow.AddDays(-30), DateTime.UtcNow);
-            var transactions = FilterTransactions(from, to, request.Category, request.Account);
+            var transactions = FilterTransactions(from, to, request.Category, request.Account, request.MasterGroupId, out _);
 
             var result = new ReportResult
             {
                 Type = ReportType.CustomRange,
                 Title = "Звіт за довільний період",
                 From = from,
-                To = to
+                To = to,
+                MasterGroupId = request.MasterGroupId
             };
 
             foreach (var transaction in transactions)
@@ -256,31 +263,13 @@ namespace doc_bursa.Services
             return (start, end);
         }
 
-        private List<Transaction> FilterTransactions(DateTime? from, DateTime? to, string? category, string? account)
+        private List<Transaction> FilterTransactions(DateTime? from, DateTime? to, string? category, string? account, int? masterGroupId, out decimal inTransitTotal)
         {
-            var transactions = _transactionService.GetEffectiveTransactions();
+            var transactions = _transactionService.GetTransactions(from, to, category, account, masterGroupId);
 
-            if (from.HasValue)
-            {
-                transactions = transactions.Where(t => t.Date >= from.Value).ToList();
-            }
-
-            if (to.HasValue)
-            {
-                transactions = transactions.Where(t => t.Date <= to.Value).ToList();
-            }
-
-            if (!string.IsNullOrWhiteSpace(category))
-            {
-                transactions = transactions.Where(t => string.Equals(t.Category, category, StringComparison.OrdinalIgnoreCase)).ToList();
-            }
-
-            if (!string.IsNullOrWhiteSpace(account))
-            {
-                transactions = transactions.Where(t => string.Equals(t.Account, account, StringComparison.OrdinalIgnoreCase)).ToList();
-            }
-
-            return transactions;
+            var filtered = TransactionFilterHelper.FilterOperationalTransactions(transactions, out var pendingTransfers);
+            inTransitTotal = pendingTransfers;
+            return filtered;
         }
     }
 }

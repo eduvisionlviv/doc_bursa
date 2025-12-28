@@ -11,6 +11,7 @@ namespace doc_bursa
     {
         public static string AppDataPath { get; private set; } = string.Empty;
         private DeduplicationBackgroundTask? _deduplicationBackgroundTask;
+        private SyncEngineService? _syncEngineService;
 
         protected override void OnStartup(StartupEventArgs e)
         {
@@ -32,12 +33,16 @@ namespace doc_bursa
             // Запуск фонової дедуплікації
             var db = new DatabaseService();
             var dedup = new DeduplicationService(db);
-            var txService = new TransactionService(db, dedup);
+            var categorization = new CategorizationService(db);
+            var txService = new TransactionService(db, dedup, categorization);
             _deduplicationBackgroundTask = new DeduplicationBackgroundTask(txService);
+            _syncEngineService = new SyncEngineService(db, txService);
+            _syncEngineService.Start();
         }
 
         protected override void OnExit(ExitEventArgs e)
         {
+            _syncEngineService?.Dispose();
             _deduplicationBackgroundTask?.Dispose();
             Log.Information("doc_bursa application shutting down.");
             Log.CloseAndFlush();
@@ -62,4 +67,3 @@ namespace doc_bursa
         }
     }
 }
-

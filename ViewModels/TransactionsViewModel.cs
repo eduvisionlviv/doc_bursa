@@ -50,9 +50,9 @@ namespace doc_bursa.ViewModels
             "Всі", "Продукти", "Транспорт", "Ресторани", "Здоров'я", "Розваги", "Дохід", "Інше"
         };
 
-        public TransactionsViewModel()
+        public TransactionsViewModel(DatabaseService? databaseService = null)
         {
-            _db = new DatabaseService();
+            _db = databaseService ?? new DatabaseService();
             _categorization = new CategorizationService(_db);
             var deduplication = new DeduplicationService(_db);
             _transactionService = new TransactionService(_db, deduplication);
@@ -62,9 +62,8 @@ namespace doc_bursa.ViewModels
         [RelayCommand]
         private void LoadTransactions()
         {
-            var allTransactions = _transactionService.GetTransactionTree();
-
-            IEnumerable<Transaction> filtered = allTransactions;
+            var accountFilter = SelectedMasterGroup?.AccountNumbers ?? Array.Empty<string>();
+            var allTransactions = _db.GetTransactions(accounts: accountFilter);
 
             if (!string.IsNullOrEmpty(SearchText))
             {

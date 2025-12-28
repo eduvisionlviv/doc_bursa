@@ -30,10 +30,13 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
             <Grid Grid.Row="0" Margin="0,0,0,20">
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="*"/>
@@ -75,11 +78,22 @@
 
                 <Border Grid.Column="3" Style="{StaticResource CardStyle}" Margin="10,0,0,0">
                     <StackPanel>
-                        <TextBlock Text="Економія" FontSize="14" Foreground="#9CA3AF"/>
-                        <TextBlock Text="{Binding Balance, StringFormat='{}{0:N2} ₴'}" 
+                        <TextBlock Text="Net Worth" FontSize="14" Foreground="#9CA3AF"/>
+                        <TextBlock Text="{Binding NetWorth, StringFormat='{}{0:N2} ₴'}" 
                                   FontSize="24" 
                                   FontWeight="Bold" 
                                   Foreground="#9B59B6" 
+                                  Margin="0,5,0,0"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="4" Style="{StaticResource CardStyle}" Margin="10,0,0,0">
+                    <StackPanel>
+                        <TextBlock Text="В дорозі" FontSize="14" Foreground="#9CA3AF"/>
+                        <TextBlock Text="{Binding InTransitTransfers, StringFormat='{}{0:N2} ₴'}" 
+                                  FontSize="24" 
+                                  FontWeight="Bold" 
+                                  Foreground="#F59E0B" 
                                   Margin="0,5,0,0"/>
                     </StackPanel>
                 </Border>
@@ -150,7 +164,56 @@
                 </Border>
             </Grid>
 
-            <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="0,20,0,0">
+            <Grid Grid.Row="2" Margin="0,20,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="2*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0,0,10,0">
+                    <StackPanel>
+                        <TextBlock Text="Net Worth по рахунках" 
+                                  FontSize="18" 
+                                  FontWeight="SemiBold" 
+                                  Margin="0,0,0,15"
+                                  Foreground="#E5E7EB"/>
+                        <lvc:CartesianChart Series="{Binding NetWorthSeries}"
+                                            XAxes="{Binding NetWorthAxes}"
+                                            Height="220"
+                                            LegendPosition="Top"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="1" Style="{StaticResource CardStyle}" Margin="0,0,10,0">
+                    <StackPanel>
+                        <TextBlock Text="Cashflow" 
+                                  FontSize="18" 
+                                  FontWeight="SemiBold" 
+                                  Margin="0,0,0,15"
+                                  Foreground="#E5E7EB"/>
+                        <lvc:CartesianChart Series="{Binding CashflowSeries}"
+                                            XAxes="{Binding CashflowAxes}"
+                                            Height="220"
+                                            LegendPosition="Top"/>
+                    </StackPanel>
+                </Border>
+
+                <Border Grid.Column="2" Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <TextBlock Text="Structure" 
+                                  FontSize="18" 
+                                  FontWeight="SemiBold" 
+                                  Margin="0,0,0,15"
+                                  Foreground="#E5E7EB"/>
+                        <lvc:PieChart Series="{Binding StructureSeries}"
+                                      LegendPosition="Right"
+                                      Height="220"/>
+                    </StackPanel>
+                </Border>
+            </Grid>
+
+            <Border Grid.Row="3" Style="{StaticResource CardStyle}" Margin="0,20,0,0">
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto"/>
