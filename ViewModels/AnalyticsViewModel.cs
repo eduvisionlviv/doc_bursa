@@ -20,6 +20,17 @@ namespace doc_bursa.ViewModels
         private readonly DatabaseService _db;
         private readonly AnalyticsService _analytics;
 
+        private MasterGroup? _selectedMasterGroup;
+        public MasterGroup? SelectedMasterGroup
+        {
+            get => _selectedMasterGroup;
+            set
+            {
+                SetProperty(ref _selectedMasterGroup, value);
+                _ = LoadAnalyticsAsync();
+            }
+        }
+
         // Властивості для статистики
         private decimal _totalIncome;
         public decimal TotalIncome
@@ -117,9 +128,9 @@ namespace doc_bursa.ViewModels
         public ICommand RefreshCommand { get; }
         public ICommand ExportCommand { get; }
 
-        public AnalyticsViewModel()
+        public AnalyticsViewModel(DatabaseService? databaseService = null)
         {
-            _db = new DatabaseService();
+            _db = databaseService ?? new DatabaseService();
             _analytics = new AnalyticsService(_db);
 
             TopCategories = new ObservableCollection<Category>();
@@ -145,7 +156,7 @@ namespace doc_bursa.ViewModels
             try
             {
                 var (startDate, endDate) = GetDateRange(SelectedPeriod);
-                var transactions = await _db.GetTransactionsAsync();
+                var transactions = await _db.GetTransactionsAsync(accounts: SelectedMasterGroup?.AccountNumbers ?? Enumerable.Empty<string>());
                 var filtered = transactions.Where(t =>
                     t.TransactionDate >= startDate &&
                     t.TransactionDate <= endDate).ToList();

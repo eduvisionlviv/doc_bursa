@@ -5,6 +5,8 @@ namespace doc_bursa.Models
     /// </summary>
     public class MasterGroupAccountGroup
     {
+        public int Id { get; set; }
+
         public int MasterGroupId { get; set; }
         public MasterGroup MasterGroup { get; set; } = null!;
 
@@ -12,4 +14,3 @@ namespace doc_bursa.Models
         public AccountGroup AccountGroup { get; set; } = null!;
     }
 }
-

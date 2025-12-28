@@ -26,15 +26,15 @@ namespace doc_bursa.Services
         /// <summary>
         /// Отримати статистику по рахунку
         /// </summary>
-        public AccountStatistics GetAccountStatistics(string accountNumber, DateTime? startDate = null, DateTime? endDate = null)
+        public AccountStatistics GetAccountStatistics(string accountNumber, DateTime? startDate = null, DateTime? endDate = null, int? masterGroupId = null)
         {
-            var cacheKey = $"account-stats:{accountNumber}:{startDate?.ToString("o") ?? "null"}:{endDate?.ToString("o") ?? "null"}";
+            var cacheKey = $"account-stats:{accountNumber}:{masterGroupId?.ToString() ?? "all"}:{startDate?.ToString("o") ?? "null"}:{endDate?.ToString("o") ?? "null"}";
             if (_cache.Get(cacheKey) is AccountStatistics cachedStats)
             {
                 return cachedStats;
             }
 
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
             
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
@@ -42,18 +42,21 @@ namespace doc_bursa.Services
             if (endDate.HasValue)
                 transactions = transactions.Where(t => t.Date <= endDate.Value).ToList();
 
+            var operationalTransactions = TransactionFilterHelper.FilterOperationalTransactions(transactions, out var inTransitTransfers);
+
             var stats = new AccountStatistics
             {
                 AccountNumber = accountNumber,
-                TotalTransactions = transactions.Count,
-                TotalDebit = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount),
-                TotalCredit = transactions.Where(t => t.Amount < 0).Sum(t => Math.Abs(t.Amount)),
-                Balance = transactions.Sum(t => t.Amount),
-                AverageTransaction = transactions.Any() ? transactions.Average(t => Math.Abs(t.Amount)) : 0,
-                LargestDebit = transactions.Where(t => t.Amount > 0).DefaultIfEmpty().Max(t => t?.Amount ?? 0),
-                LargestCredit = transactions.Where(t => t.Amount < 0).DefaultIfEmpty().Min(t => t?.Amount ?? 0),
-                FirstTransactionDate = transactions.Any() ? transactions.Min(t => t.Date) : (DateTime?)null,
-                LastTransactionDate = transactions.Any() ? transactions.Max(t => t.Date) : (DateTime?)null
+                TotalTransactions = operationalTransactions.Count,
+                TotalDebit = operationalTransactions.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                TotalCredit = operationalTransactions.Where(t => t.Amount < 0).Sum(t => Math.Abs(t.Amount)),
+                Balance = operationalTransactions.Sum(t => t.Amount),
+                AverageTransaction = operationalTransactions.Any() ? operationalTransactions.Average(t => Math.Abs(t.Amount)) : 0,
+                LargestDebit = operationalTransactions.Where(t => t.Amount > 0).DefaultIfEmpty().Max(t => t?.Amount ?? 0),
+                LargestCredit = operationalTransactions.Where(t => t.Amount < 0).DefaultIfEmpty().Min(t => t?.Amount ?? 0),
+                FirstTransactionDate = operationalTransactions.Any() ? operationalTransactions.Min(t => t.Date) : (DateTime?)null,
+                LastTransactionDate = operationalTransactions.Any() ? operationalTransactions.Max(t => t.Date) : (DateTime?)null,
+                InTransitTransfers = inTransitTransfers
             };
 
             _cache.Set(cacheKey, stats, _defaultPolicy);
@@ -63,12 +66,12 @@ namespace doc_bursa.Services
         /// <summary>
         /// Отримати статистику по групі рахунків
         /// </summary>
-        public GroupStatistics GetGroupStatistics(MasterGroup group, DateTime? startDate = null, DateTime? endDate = null)
+        public GroupStatistics GetGroupStatistics(MasterGroup group, DateTime? startDate = null, DateTime? endDate = null, int? masterGroupId = null)
         {
             if (group == null)
                 throw new ArgumentNullException(nameof(group));
 
-            var cacheKey = $"group-stats:{group.Name}:{startDate?.ToString("o") ?? "null"}:{endDate?.ToString("o") ?? "null"}";
+            var cacheKey = $"group-stats:{group.Name}:{masterGroupId?.ToString() ?? "all"}:{startDate?.ToString("o") ?? "null"}:{endDate?.ToString("o") ?? "null"}";
             if (_cache.Get(cacheKey) is GroupStatistics cachedStats)
             {
                 return cachedStats;
@@ -88,15 +91,18 @@ namespace doc_bursa.Services
             if (endDate.HasValue)
                 allTransactions = allTransactions.Where(t => t.Date <= endDate.Value).ToList();
 
+            var filteredTransactions = TransactionFilterHelper.FilterOperationalTransactions(allTransactions, out var inTransitTotal);
+
             var stats = new GroupStatistics
             {
                 GroupName = group.Name,
                 AccountCount = group.AccountNumbers.Count,
-                TotalTransactions = allTransactions.Count,
-                TotalDebit = allTransactions.Where(t => t.Amount > 0).Sum(t => t.Amount),
-                TotalCredit = allTransactions.Where(t => t.Amount < 0).Sum(t => Math.Abs(t.Amount)),
-                Balance = allTransactions.Sum(t => t.Amount),
-                AverageTransaction = allTransactions.Any() ? allTransactions.Average(t => Math.Abs(t.Amount)) : 0
+                TotalTransactions = filteredTransactions.Count,
+                TotalDebit = filteredTransactions.Where(t => t.Amount > 0).Sum(t => t.Amount),
+                TotalCredit = filteredTransactions.Where(t => t.Amount < 0).Sum(t => Math.Abs(t.Amount)),
+                Balance = filteredTransactions.Sum(t => t.Amount),
+                AverageTransaction = filteredTransactions.Any() ? filteredTransactions.Average(t => Math.Abs(t.Amount)) : 0,
+                InTransitTransfers = inTransitTotal
             };
 
             _cache.Set(cacheKey, stats, _defaultPolicy);
@@ -106,15 +112,15 @@ namespace doc_bursa.Services
         /// <summary>
         /// Отримати транзакції по категоріях
         /// </summary>
-        public Dictionary<string, decimal> GetTransactionsByCategory(string accountNumber, DateTime? startDate = null, DateTime? endDate = null)
+        public Dictionary<string, decimal> GetTransactionsByCategory(string accountNumber, DateTime? startDate = null, DateTime? endDate = null, int? masterGroupId = null)
         {
-            var cacheKey = $"cat:{accountNumber}:{startDate?.ToString("o") ?? "null"}:{endDate?.ToString("o") ?? "null"}";
+            var cacheKey = $"cat:{accountNumber}:{masterGroupId?.ToString() ?? "all"}:{startDate?.ToString("o") ?? "null"}:{endDate?.ToString("o") ?? "null"}";
             if (_cache.Get(cacheKey) is Dictionary<string, decimal> cachedCategories)
             {
                 return cachedCategories;
             }
 
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
             
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
@@ -122,7 +128,9 @@ namespace doc_bursa.Services
             if (endDate.HasValue)
                 transactions = transactions.Where(t => t.Date <= endDate.Value).ToList();
 
-            var result = transactions
+            var operationalTransactions = TransactionFilterHelper.FilterOperationalTransactions(transactions, out _);
+
+            var result = operationalTransactions
                 .GroupBy(t => t.Category ?? "Не визначено")
                 .ToDictionary(g => g.Key, g => g.Sum(t => Math.Abs(t.Amount)));
 
@@ -142,19 +150,21 @@ namespace doc_bursa.Services
         /// <summary>
         /// Отримати транзакції по місяцях
         /// </summary>
-        public Dictionary<string, MonthlyStatistics> GetMonthlyStatistics(string accountNumber, int year)
+        public Dictionary<string, MonthlyStatistics> GetMonthlyStatistics(string accountNumber, int year, int? masterGroupId = null)
         {
-            var cacheKey = $"monthly:{accountNumber}:{year}";
+            var cacheKey = $"monthly:{accountNumber}:{year}:{masterGroupId?.ToString() ?? "all"}";
             if (_cache.Get(cacheKey) is Dictionary<string, MonthlyStatistics> cachedMonthly)
             {
                 return cachedMonthly;
             }
 
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber)
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId)
                 .Where(t => t.Date.Year == year)
                 .ToList();
 
-            var monthlyStats = transactions
+            var operationalTransactions = TransactionFilterHelper.FilterOperationalTransactions(transactions, out _);
+
+            var monthlyStats = operationalTransactions
                 .GroupBy(t => new { t.Date.Year, t.Date.Month })
                 .OrderBy(g => g.Key.Year).ThenBy(g => g.Key.Month)
                 .ToDictionary(
@@ -174,26 +184,28 @@ namespace doc_bursa.Services
             return monthlyStats;
         }
 
-        public List<TrendPoint> GetTrend(string accountNumber, TrendGranularity granularity, DateTime? from = null, DateTime? to = null)
+        public List<TrendPoint> GetTrend(string accountNumber, TrendGranularity granularity, DateTime? from = null, DateTime? to = null, int? masterGroupId = null)
         {
-            var cacheKey = $"trend:{accountNumber}:{granularity}:{from?.ToString("o") ?? "null"}:{to?.ToString("o") ?? "null"}";
+            var cacheKey = $"trend:{accountNumber}:{granularity}:{masterGroupId?.ToString() ?? "all"}:{from?.ToString("o") ?? "null"}:{to?.ToString("o") ?? "null"}";
             if (_cache.Get(cacheKey) is List<TrendPoint> cached)
             {
                 return cached;
             }
 
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
             if (from.HasValue)
                 transactions = transactions.Where(t => t.Date >= from.Value).ToList();
 
             if (to.HasValue)
                 transactions = transactions.Where(t => t.Date <= to.Value).ToList();
 
+            var operationalTransactions = TransactionFilterHelper.FilterOperationalTransactions(transactions, out _);
+
             var grouped = granularity switch
             {
-                TrendGranularity.Daily => transactions.GroupBy(t => t.Date.Date),
-                TrendGranularity.Weekly => transactions.GroupBy(t => FirstDayOfWeek(t.Date)),
-                _ => transactions.GroupBy(t => new DateTime(t.Date.Year, t.Date.Month, 1))
+                TrendGranularity.Daily => operationalTransactions.GroupBy(t => t.Date.Date),
+                TrendGranularity.Weekly => operationalTransactions.GroupBy(t => FirstDayOfWeek(t.Date)),
+                _ => operationalTransactions.GroupBy(t => new DateTime(t.Date.Year, t.Date.Month, 1))
             };
 
             var trend = grouped
@@ -216,37 +228,9 @@ namespace doc_bursa.Services
             return trend;
         }
 
-        /// <summary>
-        /// Сума запланованих витрат у вказаному періоді з урахуванням вже проведених транзакцій.
-        /// </summary>
-        public decimal GetPlannedExpenseTotal(DateTime? periodStart, DateTime? periodEnd)
+        public ForecastResult ForecastBalance(string accountNumber, TrendGranularity granularity, int periods = 3, DateTime? from = null, DateTime? to = null, int? masterGroupId = null)
         {
-            var start = periodStart?.Date ?? DateTime.UtcNow.Date;
-            var end = periodEnd?.Date ?? start.AddMonths(1);
-            var actualTransactions = _databaseService.GetTransactions(start, end);
-            var recurring = _databaseService.GetRecurringTransactions(onlyActive: true);
-            var plannedTransactions = RecurringTransactionPlanner.Generate(recurring, actualTransactions, start, end);
-
-            return plannedTransactions
-                .Where(p => p.Amount < 0 && !p.IsAbsorbed)
-                .Sum(p => Math.Abs(p.Amount));
-        }
-
-        /// <summary>
-        /// Розрахувати Free Cash: поточний баланс мінус заплановані витрати.
-        /// </summary>
-        public decimal CalculateFreeCash(DateTime? periodStart, DateTime? periodEnd)
-        {
-            var actualTransactions = _databaseService.GetTransactions(periodStart, periodEnd);
-            var balance = actualTransactions.Sum(t => t.Amount);
-            var plannedExpenses = GetPlannedExpenseTotal(periodStart, periodEnd);
-
-            return balance - plannedExpenses;
-        }
-
-        public ForecastResult ForecastBalance(string accountNumber, TrendGranularity granularity, int periods = 3, DateTime? from = null, DateTime? to = null)
-        {
-            var trend = GetTrend(accountNumber, granularity, from, to);
+            var trend = GetTrend(accountNumber, granularity, from, to, masterGroupId);
             if (trend.Count < 2)
             {
                 return new ForecastResult { Points = Array.Empty<ForecastPoint>() };
@@ -275,22 +259,24 @@ namespace doc_bursa.Services
             };
         }
 
-        public List<Transaction> DetectAnomalies(string accountNumber, double threshold = 3.0, DateTime? from = null, DateTime? to = null)
+        public List<Transaction> DetectAnomalies(string accountNumber, double threshold = 3.0, DateTime? from = null, DateTime? to = null, int? masterGroupId = null)
         {
-            var cacheKey = $"anomalies:{accountNumber}:{threshold}:{from?.ToString("o") ?? "null"}:{to?.ToString("o") ?? "null"}";
+            var cacheKey = $"anomalies:{accountNumber}:{threshold}:{masterGroupId?.ToString() ?? "all"}:{from?.ToString("o") ?? "null"}:{to?.ToString("o") ?? "null"}";
             if (_cache.Get(cacheKey) is List<Transaction> cached)
             {
                 return cached;
             }
 
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
             if (from.HasValue)
                 transactions = transactions.Where(t => t.Date >= from.Value).ToList();
 
             if (to.HasValue)
                 transactions = transactions.Where(t => t.Date <= to.Value).ToList();
 
-            var amounts = transactions.Select(t => Math.Abs(t.Amount)).ToArray();
+            var operationalTransactions = TransactionFilterHelper.FilterOperationalTransactions(transactions, out _);
+
+            var amounts = operationalTransactions.Select(t => Math.Abs(t.Amount)).ToArray();
             if (amounts.Length == 0)
             {
                 return new List<Transaction>();
@@ -305,7 +291,7 @@ namespace doc_bursa.Services
                 return new List<Transaction>();
             }
 
-            var anomalies = transactions.Where(t =>
+            var anomalies = operationalTransactions.Where(t =>
             {
                 var z = (Math.Abs(t.Amount) - mean) / (decimal)stdDev;
                 return Math.Abs(z) >= (decimal)threshold;
@@ -328,9 +314,9 @@ namespace doc_bursa.Services
         /// <summary>
         /// Отримати топ контрагентів
         /// </summary>
-        public List<CounterpartyStatistics> GetTopCounterparties(string accountNumber, int topCount = 10, DateTime? startDate = null, DateTime? endDate = null)
+        public List<CounterpartyStatistics> GetTopCounterparties(string accountNumber, int topCount = 10, DateTime? startDate = null, DateTime? endDate = null, int? masterGroupId = null)
         {
-            var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            var transactions = _databaseService.GetTransactionsByAccount(accountNumber, masterGroupId);
             
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
@@ -338,7 +324,9 @@ namespace doc_bursa.Services
             if (endDate.HasValue)
                 transactions = transactions.Where(t => t.Date <= endDate.Value).ToList();
 
-            var counterpartyStats = transactions
+            var operationalTransactions = TransactionFilterHelper.FilterOperationalTransactions(transactions, out _);
+
+            var counterpartyStats = operationalTransactions
                 .Where(t => !string.IsNullOrWhiteSpace(t.Counterparty))
                 .GroupBy(t => t.Counterparty)
                 .Select(g => new CounterpartyStatistics
@@ -359,10 +347,10 @@ namespace doc_bursa.Services
         /// <summary>
         /// Порівняльний аналіз періодів
         /// </summary>
-        public PeriodComparison ComparePeriods(string accountNumber, DateTime period1Start, DateTime period1End, DateTime period2Start, DateTime period2End)
+        public PeriodComparison ComparePeriods(string accountNumber, DateTime period1Start, DateTime period1End, DateTime period2Start, DateTime period2End, int? masterGroupId = null)
         {
-            var period1Stats = GetAccountStatistics(accountNumber, period1Start, period1End);
-            var period2Stats = GetAccountStatistics(accountNumber, period2Start, period2End);
+            var period1Stats = GetAccountStatistics(accountNumber, period1Start, period1End, masterGroupId);
+            var period2Stats = GetAccountStatistics(accountNumber, period2Start, period2End, masterGroupId);
 
             return new PeriodComparison
             {
@@ -415,6 +403,7 @@ namespace doc_bursa.Services
         public decimal LargestCredit { get; set; }
         public DateTime? FirstTransactionDate { get; set; }
         public DateTime? LastTransactionDate { get; set; }
+        public decimal InTransitTransfers { get; set; }
     }
 
     public class GroupStatistics
@@ -426,6 +415,7 @@ namespace doc_bursa.Services
         public decimal TotalCredit { get; set; }
         public decimal Balance { get; set; }
         public decimal AverageTransaction { get; set; }
+        public decimal InTransitTransfers { get; set; }
     }
 
     public class MonthlyStatistics

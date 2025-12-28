@@ -59,6 +59,11 @@ namespace doc_bursa.Models
         /// Посилання на майстер-групи з композитним ключем.
         /// </summary>
         public ICollection<MasterGroupAccountGroup> MasterGroupLinks { get; set; } = new List<MasterGroupAccountGroup>();
+
+        /// <summary>
+        /// Рахунки, прив'язані до цієї групи.
+        /// </summary>
+        public ICollection<Account> Accounts { get; set; } = new List<Account>();
         
         /// <summary>
         /// Розраховує загальний баланс групи
@@ -97,4 +102,3 @@ namespace doc_bursa.Models
         }
     }
 }
-

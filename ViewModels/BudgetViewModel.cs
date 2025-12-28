@@ -65,7 +65,7 @@ namespace doc_bursa.ViewModels
             _databaseService = new DatabaseService();
             var deduplicationService = new DeduplicationService(_databaseService);
             _categorizationService = new CategorizationService(_databaseService);
-            _transactionService = new TransactionService(_databaseService, deduplicationService);
+            _transactionService = new TransactionService(_databaseService, deduplicationService, _categorizationService);
             _budgetService = new BudgetService(_databaseService, _transactionService, _categorizationService);
             _analyzer = new BudgetAnalyzer(_transactionService, _categorizationService);
 

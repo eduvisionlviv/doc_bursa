@@ -36,6 +36,9 @@ namespace doc_bursa.ViewModels
         private string? selectedAccount;
 
         [ObservableProperty]
+        private int? masterGroupId;
+
+        [ObservableProperty]
         private string previewContent = string.Empty;
 
         public ObservableCollection<ReportType> ReportTypes { get; } = new(Enum.GetValues<ReportType>());
@@ -48,13 +51,13 @@ namespace doc_bursa.ViewModels
         {
             var db = new DatabaseService();
             var dedup = new DeduplicationService(db);
-            var transactionService = new TransactionService(db, dedup);
             var categorization = new CategorizationService(db);
+            var transactionService = new TransactionService(db, dedup, categorization);
             var budgetService = new BudgetService(db, transactionService, categorization);
 
             _reportService = new ReportService(transactionService, budgetService, categorization);
-            _exportService = new ExportService();
-            _generationEngine = new ReportGenerationEngine();
+            _exportService = new ExportService(db);
+            _generationEngine = new ReportGenerationEngine(db);
         }
 
         [RelayCommand]
@@ -79,7 +82,8 @@ namespace doc_bursa.ViewModels
             var path = Path.Combine(Path.GetTempPath(), fileName);
             var options = new ExportOptions
             {
-                SelectedColumns = Columns.ToList()
+                SelectedColumns = Columns.ToList(),
+                MasterGroupId = MasterGroupId
             };
 
             await _exportService.ExportReportAsync(report, path, SelectedFormat, options);
@@ -95,6 +99,7 @@ namespace doc_bursa.ViewModels
                 To = ToDate,
                 Category = SelectedCategory,
                 Account = SelectedAccount,
+                MasterGroupId = MasterGroupId,
                 Columns = Columns.ToList(),
                 PreferredFormat = SelectedFormat
             };
@@ -116,4 +121,3 @@ namespace doc_bursa.ViewModels
         }
     }
 }
-
