@@ -452,6 +452,12 @@ namespace doc_bursa.Services
         public decimal TransactionGrowth { get; set; }
     }
 
+            public decimal GetPlannedExpenseTotal(DateTime from, DateTime to)
+        {
+            // Return 0 for now as this is a placeholder
+            return 0m;
+        }
+
     public enum TrendGranularity
     {
         Daily,
