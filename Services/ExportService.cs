@@ -163,7 +163,7 @@ namespace doc_bursa.Services
             {
                 var filteredRows = ApplyMasterGroupFilter(result.Rows, options.MasterGroupId);
                 filteredRows = ApplyFilters(filteredRows, options.Filters).ToList();
-                var columns = ResolveColumns(filteredRows, options.SelectedColumns);
+                var columns = ResolveColumns(filteredRows.ToList(), options.SelectedColumns);
                 var builder = new StringBuilder();
 
                 builder.AppendLine(result.Title);
