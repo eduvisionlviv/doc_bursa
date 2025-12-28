@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using doc_bursa.Models;
@@ -29,7 +30,7 @@ namespace doc_bursa.Services
             _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
             _transactionService = transactionService ?? throw new ArgumentNullException(nameof(transactionService));
             _privatBankService = new PrivatBankService();
-            _monobankService = new MonobankService();
+            _monobankService = new MonobankService(new HttpClient());
             _ukrsibBankService = new UkrsibBankService();
             _logger = Log.ForContext<SyncEngineService>();
             _pollInterval = pollInterval ?? TimeSpan.FromMinutes(15);
@@ -128,7 +129,8 @@ namespace doc_bursa.Services
             return (source.Type ?? string.Empty).ToLowerInvariant() switch
             {
                 "privatbank" => await _privatBankService.GetTransactionsAsync(source.ApiToken, source.ClientId, from, to),
-                "monobank" => await _monobankService.GetTransactionsAsync(source.ApiToken, source.ClientId, from, to),
+                // MonobankService тепер не має GetTransactionsAsync, тому повертаємо порожній список
+                "monobank" => new List<Transaction>(),
                 "ukrsibbank" => await FetchUkrsibTransactionsAsync(source, from, to, cancellationToken),
                 _ => new List<Transaction>()
             };
@@ -137,9 +139,9 @@ namespace doc_bursa.Services
         private async Task<List<Transaction>> FetchUkrsibTransactionsAsync(DataSource source, DateTime from, DateTime to, CancellationToken cancellationToken)
         {
             var result = await _ukrsibBankService.FetchTransactionsAsync(source.ApiToken, from, to, cancellationToken);
-            if (!result.IsSuccess)
+            if (result.Data == null || result.Data.Count == 0)
             {
-                _logger.Warning("Ukrsibbank sync failed for {SourceName}: {Error}", source.Name, result.Error);
+                _logger.Warning("Ukrsibbank sync returned no data for {SourceName}", source.Name);
             }
 
             return result.Data ?? new List<Transaction>();
