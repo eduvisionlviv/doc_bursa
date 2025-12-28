@@ -17,6 +17,7 @@ namespace doc_bursa.Services
     {
         private readonly string _connectionString;
         private readonly ILogger _logger;
+        private readonly EncryptionService _encryption;
 
         public DatabaseService(string? databasePath = null)
         {
@@ -25,6 +26,7 @@ namespace doc_bursa.Services
                 : databasePath;
             _connectionString = $"Data Source={dbPath}";
             _logger = Log.ForContext<DatabaseService>();
+            _encryption = new EncryptionService();
             InitializeDatabase();
         }
 
@@ -364,6 +366,19 @@ namespace doc_bursa.Services
 
                 conditions.Add($"Account IN ({string.Join(",", accountParameters)})");
             }
+            else if (accountsScope.HasValue)
+            {
+                var accountParameters = accountsScope.Accounts
+                    .Select((acc, index) => new { Parameter = $"$acc{index}", Value = acc })
+                    .ToList();
+
+                conditions.Add($"Account IN ({string.Join(",", accountParameters.Select(p => p.Parameter))})");
+
+                foreach (var parameter in accountParameters)
+                {
+                    command.Parameters.AddWithValue(parameter.Parameter, parameter.Value);
+                }
+            }
 
             var whereClause = conditions.Any() ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
             command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId FROM Transactions {whereClause} ORDER BY Date DESC";
@@ -407,9 +422,9 @@ namespace doc_bursa.Services
             return Task.Run(() => GetTransactions(from, to, category, account, accounts), cancellationToken);
         }
 
-        public List<Transaction> GetTransactionsByAccount(string account)
+        public List<Transaction> GetTransactionsByAccount(string account, int? masterGroupId = null)
         {
-            return GetTransactions(account: account);
+            return GetTransactions(account: account, masterGroupId: masterGroupId);
         }
 
         public void UpdateTransactionCategory(int id, string category)
@@ -763,9 +778,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.ExecuteNonQuery();
@@ -787,9 +802,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
 
@@ -813,9 +828,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.Parameters.AddWithValue("$id", source.Id);
@@ -852,9 +867,9 @@ namespace doc_bursa.Services
 
             command.Parameters.AddWithValue("$name", source.Name);
             command.Parameters.AddWithValue("$type", source.Type);
-            command.Parameters.AddWithValue("$token", source.ApiToken ?? string.Empty);
+            command.Parameters.AddWithValue("$token", EncryptSensitive(source.ApiToken));
             command.Parameters.AddWithValue("$cid", source.ClientId ?? string.Empty);
-            command.Parameters.AddWithValue("$secret", source.ClientSecret ?? string.Empty);
+            command.Parameters.AddWithValue("$secret", EncryptSensitive(source.ClientSecret));
             command.Parameters.AddWithValue("$enabled", source.IsEnabled ? 1 : 0);
             command.Parameters.AddWithValue("$sync", source.LastSync?.ToString("o") ?? string.Empty);
             command.Parameters.AddWithValue("$id", source.Id);
@@ -917,12 +932,32 @@ namespace doc_bursa.Services
                 Id = reader.GetInt32(0),
                 Name = reader.GetString(1),
                 Type = reader.GetString(2),
-                ApiToken = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                ApiToken = DecryptSensitive(reader.IsDBNull(3) ? string.Empty : reader.GetString(3)),
                 ClientId = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
-                ClientSecret = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+                ClientSecret = DecryptSensitive(reader.IsDBNull(5) ? string.Empty : reader.GetString(5)),
                 IsEnabled = reader.GetInt32(6) == 1,
                 LastSync = string.IsNullOrEmpty(reader.GetString(7)) ? null : DateTime.Parse(reader.GetString(7))
             };
+        }
+
+        private string EncryptSensitive(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return _encryption.IsEncrypted(value) ? value : _encryption.Encrypt(value);
+        }
+
+        private string DecryptSensitive(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return _encryption.Decrypt(value);
         }
 
         // Category Rules
@@ -1105,6 +1140,22 @@ namespace doc_bursa.Services
         }
 
         // MasterGroup CRUD operations
+        public HashSet<string> GetMasterGroupAccounts(int masterGroupId)
+        {
+            var group = GetMasterGroups().FirstOrDefault(g => g.Id == masterGroupId);
+            if (group?.AccountNumbers == null || group.AccountNumbers.Count == 0)
+            {
+                return new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            }
+
+            return new HashSet<string>(group.AccountNumbers.Where(a => !string.IsNullOrWhiteSpace(a)), StringComparer.OrdinalIgnoreCase);
+        }
+
+        public string? GetMasterGroupName(int masterGroupId)
+        {
+            return GetMasterGroups().FirstOrDefault(g => g.Id == masterGroupId)?.Name;
+        }
+
         public void SaveMasterGroup(MasterGroup group)
         {
             using var connection = new SqliteConnection(_connectionString);

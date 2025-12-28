@@ -11,6 +11,13 @@ namespace doc_bursa.Services
     /// </summary>
     public class ReportGenerationEngine
     {
+        private readonly DatabaseService _databaseService;
+
+        public ReportGenerationEngine(DatabaseService? databaseService = null)
+        {
+            _databaseService = databaseService ?? new DatabaseService();
+        }
+
         private readonly Dictionary<ReportType, string> _templates = new()
         {
             { ReportType.MonthlyIncomeExpense, "Звіт: {Title}\\nПеріод: {Period}\\n" },
@@ -68,9 +75,28 @@ namespace doc_bursa.Services
         {
             var template = _templates.TryGetValue(report.Type, out var value) ? value : "Звіт\\nПеріод: {Period}\\n";
             var period = $"{report.From:yyyy-MM-dd} - {report.To:yyyy-MM-dd}";
-            return template
+            var rendered = template
                 .Replace("{Title}", report.Title)
                 .Replace("{Period}", period);
+
+            var groupLabel = GetMasterGroupLabel(report.MasterGroupId);
+            if (!string.IsNullOrWhiteSpace(groupLabel))
+            {
+                rendered += $"Група: {groupLabel}\\n";
+            }
+
+            return rendered;
+        }
+
+        private string GetMasterGroupLabel(int? masterGroupId)
+        {
+            if (!masterGroupId.HasValue)
+            {
+                return string.Empty;
+            }
+
+            var name = _databaseService.GetMasterGroupName(masterGroupId.Value);
+            return string.IsNullOrWhiteSpace(name) ? $"ID {masterGroupId}" : name!;
         }
 
         private List<List<ReportRow>> SplitIntoPages(List<ReportRow> rows, int pageSize)
@@ -90,4 +116,3 @@ namespace doc_bursa.Services
         }
     }
 }
-

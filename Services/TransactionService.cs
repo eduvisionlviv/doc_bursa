@@ -34,9 +34,9 @@ namespace doc_bursa.Services
             return true;
         }
 
-        public List<Transaction> GetTransactions()
+        public List<Transaction> GetTransactions(DateTime? from = null, DateTime? to = null, string? category = null, string? account = null, int? masterGroupId = null)
         {
-            return _databaseService.GetTransactions();
+            return _databaseService.GetTransactions(from, to, category, account, masterGroupId);
         }
 
         public bool MarkAsDuplicate(Guid transactionId)

@@ -35,6 +35,8 @@ namespace doc_bursa.Models
         public Dictionary<string, string> Filters { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
         public string Delimiter { get; set; } = ",";
+
+        public int? MasterGroupId { get; set; }
     }
 
     /// <summary>
@@ -51,6 +53,8 @@ namespace doc_bursa.Models
         public string? Category { get; set; }
 
         public string? Account { get; set; }
+
+        public int? MasterGroupId { get; set; }
 
         public List<string> Columns { get; set; } = new();
 
@@ -106,6 +110,8 @@ namespace doc_bursa.Models
 
         public DateTime? To { get; set; }
 
+        public int? MasterGroupId { get; set; }
+
         public Dictionary<string, decimal> Metrics { get; } = new(StringComparer.OrdinalIgnoreCase);
 
         public List<ReportRow> Rows { get; } = new();
@@ -135,4 +141,3 @@ namespace doc_bursa.Models
         public List<ChartData> Charts { get; } = new();
     }
 }
-
