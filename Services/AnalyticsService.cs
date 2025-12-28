@@ -35,6 +35,7 @@ namespace doc_bursa.Services
             }
 
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            transactions = FilterTransfers(transactions);
             
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
@@ -115,6 +116,7 @@ namespace doc_bursa.Services
             }
 
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            transactions = FilterTransfers(transactions);
             
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();
@@ -153,6 +155,7 @@ namespace doc_bursa.Services
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber)
                 .Where(t => t.Date.Year == year)
                 .ToList();
+            transactions = FilterTransfers(transactions);
 
             var monthlyStats = transactions
                 .GroupBy(t => new { t.Date.Year, t.Date.Month })
@@ -183,6 +186,7 @@ namespace doc_bursa.Services
             }
 
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            transactions = FilterTransfers(transactions);
             if (from.HasValue)
                 transactions = transactions.Where(t => t.Date >= from.Value).ToList();
 
@@ -287,6 +291,11 @@ namespace doc_bursa.Services
             return anomalies;
         }
 
+        private static List<Transaction> FilterTransfers(List<Transaction> transactions, bool includeTransfers = false)
+        {
+            return includeTransfers ? transactions : transactions.Where(t => !t.IsTransfer).ToList();
+        }
+
         public async Task WarmUpCacheAsync(string accountNumber, CancellationToken cancellationToken = default)
         {
             await Task.Run(() =>
@@ -303,6 +312,7 @@ namespace doc_bursa.Services
         public List<CounterpartyStatistics> GetTopCounterparties(string accountNumber, int topCount = 10, DateTime? startDate = null, DateTime? endDate = null)
         {
             var transactions = _databaseService.GetTransactionsByAccount(accountNumber);
+            transactions = FilterTransfers(transactions);
             
             if (startDate.HasValue)
                 transactions = transactions.Where(t => t.Date >= startDate.Value).ToList();

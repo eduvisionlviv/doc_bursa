@@ -15,6 +15,7 @@ namespace doc_bursa.ViewModels
 
         private readonly DatabaseService _db;
         private readonly CategorizationService _categorization;
+        private readonly ReconciliationService _reconciliation;
         private List<Transaction> _filteredTransactions = new();
 
         [ObservableProperty]
@@ -35,6 +36,9 @@ namespace doc_bursa.ViewModels
         [ObservableProperty]
         private int totalPages = 1;
 
+        [ObservableProperty]
+        private decimal transferCommissionInput;
+
         public List<string> Categories { get; } = new()
         {
             "Всі", "Продукти", "Транспорт", "Ресторани", "Здоров'я", "Розваги", "Дохід", "Інше"
@@ -44,6 +48,7 @@ namespace doc_bursa.ViewModels
         {
             _db = new DatabaseService();
             _categorization = new CategorizationService(_db);
+            _reconciliation = new ReconciliationService(_db);
             LoadTransactions();
         }
 
@@ -115,6 +120,41 @@ namespace doc_bursa.ViewModels
             }
         }
 
+        [RelayCommand]
+        private void ReconcileTransfers()
+        {
+            _reconciliation.ReconcileTransfers();
+            LoadTransactions();
+        }
+
+        [RelayCommand]
+        private void MarkAsTransfer()
+        {
+            if (SelectedTransaction == null)
+            {
+                return;
+            }
+
+            _reconciliation.UpdateTransferStatus(SelectedTransaction, TransferMatchStatuses.InTransit, TransferCommissionInput);
+            LoadTransactions();
+        }
+
+        [RelayCommand]
+        private void ConfirmTransfer()
+        {
+            if (SelectedTransaction == null)
+            {
+                return;
+            }
+
+            var status = Math.Abs(TransferCommissionInput) < 0.01m
+                ? TransferMatchStatuses.Matched
+                : TransferMatchStatuses.CommissionDelta;
+
+            _reconciliation.UpdateTransferStatus(SelectedTransaction, status, TransferCommissionInput);
+            LoadTransactions();
+        }
+
         partial void OnSearchTextChanged(string value)
         {
             CurrentPage = 1;
@@ -126,6 +166,10 @@ namespace doc_bursa.ViewModels
             CurrentPage = 1;
             LoadTransactions();
         }
+
+        partial void OnSelectedTransactionChanged(Transaction? value)
+        {
+            TransferCommissionInput = value?.TransferCommission ?? 0;
+        }
     }
 }
-

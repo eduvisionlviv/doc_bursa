@@ -45,6 +45,15 @@
             <TextBlock Text="{Binding CurrentPage, StringFormat='Сторінка {0}'}" Margin="10,0" Foreground="#E5E7EB"/>
             <TextBlock Text="{Binding TotalPages, StringFormat='з {0}'}" Foreground="#E5E7EB"/>
             <Button Content="▶" Width="40" Command="{Binding NextPageCommand}" Margin="10,0,0,0"/>
+            <StackPanel Orientation="Horizontal" Margin="20,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="Комісія:" Foreground="#E5E7EB" VerticalAlignment="Center" Margin="0,0,6,0"/>
+                <TextBox Width="80"
+                         Text="{Binding TransferCommissionInput, UpdateSourceTrigger=PropertyChanged}"
+                         Margin="0,0,10,0"/>
+                <Button Content="Звірити авто" Command="{Binding ReconcileTransfersCommand}" Margin="0,0,6,0"/>
+                <Button Content="Переказ" Command="{Binding MarkAsTransferCommand}" Margin="0,0,6,0"/>
+                <Button Content="Підтвердити/оновити" Command="{Binding ConfirmTransferCommand}"/>
+            </StackPanel>
         </StackPanel>
 
         <Border Grid.Row="3" Style="{StaticResource CardStyle}">
@@ -73,6 +82,9 @@
                     <DataGridTextColumn Header="Категорія" 
                                        Binding="{Binding Category}" 
                                        Width="150"/>
+                    <DataGridCheckBoxColumn Header="Переказ" Binding="{Binding IsTransfer}" Width="90"/>
+                    <DataGridTextColumn Header="Статус" Binding="{Binding TransferStatus}" Width="120"/>
+                    <DataGridTextColumn Header="Комісія" Binding="{Binding TransferCommission, StringFormat='{}{0:N2}'}" Width="100"/>
                     <DataGridTextColumn Header="Сума" 
                                        Binding="{Binding Amount, StringFormat='{}{0:N2} ₴'}" 
                                        Width="120">

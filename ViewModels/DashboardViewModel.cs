@@ -77,6 +77,7 @@ namespace doc_bursa.ViewModels
         {
             var (from, to) = GetDateRange();
             var transactions = _db.GetTransactions(from, to);
+            transactions = transactions.Where(t => !t.IsTransfer).ToList();
 
             TotalIncome = transactions.Where(t => t.Amount > 0).Sum(t => t.Amount);
             TotalExpenses = Math.Abs(transactions.Where(t => t.Amount < 0).Sum(t => t.Amount));

@@ -63,5 +63,21 @@ namespace doc_bursa.Models
         /// </summary>
         [MaxLength(128)]
         public string OriginalTransactionId { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Позначка, що транзакція є внутрішнім переказом.
+        /// </summary>
+        public bool IsTransfer { get; set; }
+
+        /// <summary>
+        /// Статус звірки переказу.
+        /// </summary>
+        [MaxLength(32)]
+        public string TransferStatus { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Комісія або різниця суми між списанням та зарахуванням.
+        /// </summary>
+        public decimal TransferCommission { get; set; }
     }
 }

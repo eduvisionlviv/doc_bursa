@@ -48,7 +48,10 @@ namespace doc_bursa.Services
                     Balance REAL,
                     Hash TEXT UNIQUE,
                     IsDuplicate INTEGER DEFAULT 0,
-                    OriginalTransactionId TEXT
+                    OriginalTransactionId TEXT,
+                    IsTransfer INTEGER DEFAULT 0,
+                    TransferStatus TEXT,
+                    TransferCommission REAL
                 );
 
                 CREATE TABLE IF NOT EXISTS DataSources (
@@ -98,6 +101,24 @@ namespace doc_bursa.Services
                     CreatedAt TEXT NOT NULL,
                     UpdatedAt TEXT
                 );
+
+                CREATE TABLE IF NOT EXISTS TransferRules (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    CounterpartyPattern TEXT,
+                    AccountNumber TEXT,
+                    TargetSource TEXT,
+                    IsActive INTEGER DEFAULT 1
+                );
+
+                CREATE TABLE IF NOT EXISTS TransferMatches (
+                    Id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    OutgoingTransactionId TEXT NOT NULL,
+                    IncomingTransactionId TEXT,
+                    CommissionDelta REAL,
+                    Status TEXT,
+                    CreatedAt TEXT NOT NULL,
+                    UpdatedAt TEXT NOT NULL
+                );
             ";
             command.ExecuteNonQuery();
 
@@ -136,6 +157,9 @@ namespace doc_bursa.Services
             AddColumnIfMissing("IsDuplicate", "INTEGER DEFAULT 0");
             AddColumnIfMissing("OriginalTransactionId", "TEXT");
             AddColumnIfMissing("Counterparty", "TEXT");
+            AddColumnIfMissing("IsTransfer", "INTEGER DEFAULT 0");
+            AddColumnIfMissing("TransferStatus", "TEXT");
+            AddColumnIfMissing("TransferCommission", "REAL DEFAULT 0");
         }
 
         private static void EnsureBudgetTable(SqliteConnection connection)
@@ -200,8 +224,8 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO Transactions 
-                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId)
-                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid)
+                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, IsTransfer, TransferStatus, TransferCommission)
+                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid, $isTransfer, $transferStatus, $transferCommission)
             ";
 
             command.Parameters.AddWithValue("$tid", transaction.TransactionId);
@@ -216,6 +240,9 @@ namespace doc_bursa.Services
             command.Parameters.AddWithValue("$hash", transaction.Hash ?? string.Empty);
             command.Parameters.AddWithValue("$isDuplicate", transaction.IsDuplicate ? 1 : 0);
             command.Parameters.AddWithValue("$originalTid", transaction.OriginalTransactionId ?? string.Empty);
+            command.Parameters.AddWithValue("$isTransfer", transaction.IsTransfer ? 1 : 0);
+            command.Parameters.AddWithValue("$transferStatus", transaction.TransferStatus ?? string.Empty);
+            command.Parameters.AddWithValue("$transferCommission", transaction.TransferCommission);
             command.ExecuteNonQuery();
 
             _logger.Information("Transaction saved: {TransactionId}", transaction.TransactionId);
@@ -230,8 +257,8 @@ namespace doc_bursa.Services
             var command = connection.CreateCommand();
             command.CommandText = @"
                 INSERT OR REPLACE INTO Transactions 
-                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId)
-                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid)
+                (TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, IsTransfer, TransferStatus, TransferCommission)
+                VALUES ($tid, $date, $amount, $desc, $cat, $src, $counterparty, $account, $balance, $hash, $isDuplicate, $originalTid, $isTransfer, $transferStatus, $transferCommission)
             ";
 
             var tidParam = command.Parameters.Add("$tid", SqliteType.Text);
@@ -246,6 +273,9 @@ namespace doc_bursa.Services
             var hashParam = command.Parameters.Add("$hash", SqliteType.Text);
             var isDuplicateParam = command.Parameters.Add("$isDuplicate", SqliteType.Integer);
             var originalTidParam = command.Parameters.Add("$originalTid", SqliteType.Text);
+            var isTransferParam = command.Parameters.Add("$isTransfer", SqliteType.Integer);
+            var transferStatusParam = command.Parameters.Add("$transferStatus", SqliteType.Text);
+            var transferCommissionParam = command.Parameters.Add("$transferCommission", SqliteType.Real);
 
             foreach (var transaction in transactions)
             {
@@ -261,6 +291,9 @@ namespace doc_bursa.Services
                 hashParam.Value = transaction.Hash ?? string.Empty;
                 isDuplicateParam.Value = transaction.IsDuplicate ? 1 : 0;
                 originalTidParam.Value = transaction.OriginalTransactionId ?? string.Empty;
+                isTransferParam.Value = transaction.IsTransfer ? 1 : 0;
+                transferStatusParam.Value = transaction.TransferStatus ?? string.Empty;
+                transferCommissionParam.Value = transaction.TransferCommission;
 
                 command.ExecuteNonQuery();
             }
@@ -319,7 +352,7 @@ namespace doc_bursa.Services
             }
 
             var whereClause = conditions.Any() ? "WHERE " + string.Join(" AND ", conditions) : string.Empty;
-            command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId FROM Transactions {whereClause} ORDER BY Date DESC";
+            command.CommandText = $"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, IsTransfer, TransferStatus, TransferCommission FROM Transactions {whereClause} ORDER BY Date DESC";
 
             var transactions = new List<Transaction>();
             using var reader = command.ExecuteReader();
@@ -346,7 +379,10 @@ namespace doc_bursa.Services
                     Balance = reader.IsDBNull(9) ? 0 : (decimal)reader.GetDouble(9),
                     Hash = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
                     IsDuplicate = !reader.IsDBNull(11) && reader.GetInt32(11) == 1,
-                    OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12)
+                    OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
+                    IsTransfer = !reader.IsDBNull(13) && reader.GetInt32(13) == 1,
+                    TransferStatus = reader.IsDBNull(14) ? string.Empty : reader.GetString(14),
+                    TransferCommission = reader.IsDBNull(15) ? 0 : (decimal)reader.GetDouble(15)
                 };
 
                 transactions.Add(transaction);
@@ -394,7 +430,7 @@ namespace doc_bursa.Services
             connection.Open();
 
             var command = connection.CreateCommand();
-            command.CommandText = @"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId 
+            command.CommandText = @"SELECT Id, TransactionId, Date, Amount, Description, Category, Source, Counterparty, Account, Balance, Hash, IsDuplicate, OriginalTransactionId, IsTransfer, TransferStatus, TransferCommission 
                                     FROM Transactions WHERE TransactionId = $tid LIMIT 1";
             command.Parameters.AddWithValue("$tid", transactionId);
 
@@ -419,7 +455,10 @@ namespace doc_bursa.Services
                     Balance = reader.IsDBNull(9) ? 0 : (decimal)reader.GetDouble(9),
                     Hash = reader.IsDBNull(10) ? string.Empty : reader.GetString(10),
                     IsDuplicate = !reader.IsDBNull(11) && reader.GetInt32(11) == 1,
-                    OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12)
+                    OriginalTransactionId = reader.IsDBNull(12) ? string.Empty : reader.GetString(12),
+                    IsTransfer = !reader.IsDBNull(13) && reader.GetInt32(13) == 1,
+                    TransferStatus = reader.IsDBNull(14) ? string.Empty : reader.GetString(14),
+                    TransferCommission = reader.IsDBNull(15) ? 0 : (decimal)reader.GetDouble(15)
                 };
             }
 
@@ -457,6 +496,155 @@ namespace doc_bursa.Services
             }
 
             return accounts;
+        }
+
+        // Transfer rules & matches
+        public void SaveTransferRule(TransferRule rule)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            if (rule.Id == 0)
+            {
+                command.CommandText = @"INSERT INTO TransferRules (CounterpartyPattern, AccountNumber, TargetSource, IsActive)
+                                        VALUES ($pattern, $account, $source, $active)";
+            }
+            else
+            {
+                command.CommandText = @"UPDATE TransferRules
+                                        SET CounterpartyPattern = $pattern, AccountNumber = $account,
+                                            TargetSource = $source, IsActive = $active
+                                        WHERE Id = $id";
+                command.Parameters.AddWithValue("$id", rule.Id);
+            }
+
+            command.Parameters.AddWithValue("$pattern", rule.CounterpartyPattern ?? string.Empty);
+            command.Parameters.AddWithValue("$account", rule.AccountNumber ?? string.Empty);
+            command.Parameters.AddWithValue("$source", rule.TargetSource ?? string.Empty);
+            command.Parameters.AddWithValue("$active", rule.IsActive ? 1 : 0);
+            command.ExecuteNonQuery();
+        }
+
+        public List<TransferRule> GetTransferRules(bool onlyActive = false)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT Id, CounterpartyPattern, AccountNumber, TargetSource, IsActive FROM TransferRules"
+                                  + (onlyActive ? " WHERE IsActive = 1" : string.Empty);
+
+            var result = new List<TransferRule>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new TransferRule
+                {
+                    Id = reader.GetInt32(0),
+                    CounterpartyPattern = reader.IsDBNull(1) ? string.Empty : reader.GetString(1),
+                    AccountNumber = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                    TargetSource = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    IsActive = reader.IsDBNull(4) ? true : reader.GetInt32(4) == 1
+                });
+            }
+
+            return result;
+        }
+
+        public void DeleteTransferRule(int id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM TransferRules WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
+        }
+
+        public void SaveTransferMatch(TransferMatch match)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            if (match.Id == 0)
+            {
+                command.CommandText = @"INSERT INTO TransferMatches
+                    (OutgoingTransactionId, IncomingTransactionId, CommissionDelta, Status, CreatedAt, UpdatedAt)
+                    VALUES ($outId, $inId, $commission, $status, $created, $updated)";
+            }
+            else
+            {
+                command.CommandText = @"UPDATE TransferMatches
+                    SET OutgoingTransactionId = $outId, IncomingTransactionId = $inId,
+                        CommissionDelta = $commission, Status = $status, UpdatedAt = $updated
+                    WHERE Id = $id";
+                command.Parameters.AddWithValue("$id", match.Id);
+            }
+
+            command.Parameters.AddWithValue("$outId", match.OutgoingTransactionId);
+            command.Parameters.AddWithValue("$inId", match.IncomingTransactionId ?? string.Empty);
+            command.Parameters.AddWithValue("$commission", match.CommissionDelta);
+            command.Parameters.AddWithValue("$status", match.Status ?? string.Empty);
+            command.Parameters.AddWithValue("$created", match.CreatedAt.ToString("o"));
+            command.Parameters.AddWithValue("$updated", match.UpdatedAt.ToString("o"));
+            command.ExecuteNonQuery();
+        }
+
+        public List<TransferMatch> GetTransferMatches()
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT Id, OutgoingTransactionId, IncomingTransactionId, CommissionDelta, Status, CreatedAt, UpdatedAt FROM TransferMatches";
+
+            var result = new List<TransferMatch>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new TransferMatch
+                {
+                    Id = reader.GetInt32(0),
+                    OutgoingTransactionId = reader.GetString(1),
+                    IncomingTransactionId = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                    CommissionDelta = reader.IsDBNull(3) ? 0 : (decimal)reader.GetDouble(3),
+                    Status = reader.IsDBNull(4) ? string.Empty : reader.GetString(4),
+                    CreatedAt = DateTime.Parse(reader.GetString(5)),
+                    UpdatedAt = DateTime.Parse(reader.GetString(6))
+                });
+            }
+
+            return result;
+        }
+
+        public void DeleteTransferMatch(int id)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "DELETE FROM TransferMatches WHERE Id = $id";
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
+        }
+
+        public void UpdateTransactionTransferInfo(int id, bool isTransfer, string status, decimal commission)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = @"UPDATE Transactions 
+                                    SET IsTransfer = $isTransfer, TransferStatus = $status, TransferCommission = $commission 
+                                    WHERE Id = $id";
+            command.Parameters.AddWithValue("$isTransfer", isTransfer ? 1 : 0);
+            command.Parameters.AddWithValue("$status", status ?? string.Empty);
+            command.Parameters.AddWithValue("$commission", commission);
+            command.Parameters.AddWithValue("$id", id);
+            command.ExecuteNonQuery();
         }
 
         // Budgets
