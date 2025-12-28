@@ -1,6 +1,7 @@
 using System;
 using System.Collections.ObjectModel;
 using System.Linq;
+using System.Net.Http;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using doc_bursa.Models;
@@ -12,6 +13,7 @@ namespace doc_bursa.ViewModels
     public partial class MainViewModel : ObservableObject
     {
         private readonly DatabaseService _databaseService;
+        private readonly HttpClient _httpClient;
 
         [ObservableProperty]
         private object? currentView;
@@ -32,11 +34,12 @@ namespace doc_bursa.ViewModels
         public MainViewModel()
         {
             _databaseService = new DatabaseService();
+            _httpClient = new HttpClient();
 
             // Ініціалізуємо ViewModels
             DashboardViewModel = new DashboardViewModel(_databaseService);
-            TransactionsViewModel = new TransactionsViewModel(_databaseService, new CategoryRepository(_databaseService));;
-            SourcesViewModel = new SourcesViewModel(new MonobankService(_databaseService), new PrivatBankService(_databaseService));
+            TransactionsViewModel = new TransactionsViewModel(_databaseService);
+            SourcesViewModel = new SourcesViewModel(new MonobankService(_httpClient), new PrivatBankService());
             BudgetViewModel = new BudgetViewModel();
             GroupsViewModel = new GroupsViewModel(_databaseService);
             AnalyticsViewModel = new AnalyticsViewModel(_databaseService);
