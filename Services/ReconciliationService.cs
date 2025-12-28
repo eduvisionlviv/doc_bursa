@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using doc_bursa.Models;
-using doc_bursa.Infrastructure.Data;
 using Serilog;
 
 namespace doc_bursa.Services
