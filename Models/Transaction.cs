@@ -49,6 +49,8 @@ namespace doc_bursa.Models
         [MaxLength(10)]
         public string Currency { get; set; } = "UAH";
 
+                public bool IsTransfer { get; set; }
+
         [MaxLength(256)]
         public string Counterparty { get; set; } = string.Empty;
 
