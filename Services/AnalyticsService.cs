@@ -474,14 +474,12 @@ namespace doc_bursa.Services
                 to
             );
 
-            // 4. Сумуємо тільки витрати, які ще НЕ були поглинуті
-            // RecurringTransactionPlanner вже має логіку IsAbsorbed/IsPlanned
+                        // 4. Сумуємо тільки ті, що є витратами (< 0) і ще НЕ мають прив'язки до реальної транзакції
             var futureExpenses = plannedItems
-                .Where(p => !p.IsPlanned && p.IsActive) // Тільки майбутні активні
+                .Where(p => string.IsNullOrEmpty(p.LinkedTransactionId)) // Тільки ті, що ще не відбулися (немає пари)
                 .Where(p => p.Amount < 0) // Тільки витрати
                 .Sum(p => Math.Abs(p.Amount));
 
-            return futureExpenses;
         }
     public enum TrendGranularity
     {
