@@ -38,7 +38,13 @@ namespace doc_bursa.ViewModels
 
             // Ініціалізуємо ViewModels
             DashboardViewModel = new DashboardViewModel(_databaseService);
-            TransactionsViewModel = new TransactionsViewModel(_databaseService);
+            
+            // TransactionsViewModel потребує TransactionService і CategorizationService
+            var deduplicationService = new DeduplicationService(_databaseService);
+            var categorizationService = new CategorizationService(_databaseService);
+            var transactionService = new TransactionService(_databaseService, deduplicationService, categorizationService);
+            TransactionsViewModel = new TransactionsViewModel(transactionService, categorizationService);
+            
             SourcesViewModel = new SourcesViewModel(new MonobankService(_httpClient), new PrivatBankService());
             BudgetViewModel = new BudgetViewModel();
             GroupsViewModel = new GroupsViewModel(_databaseService);
