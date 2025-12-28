@@ -66,4 +66,114 @@ namespace doc_bursa.ViewModels
             var deduplicationService = new DeduplicationService(_databaseService);
             _categorizationService = new CategorizationService(_databaseService);
             _transactionService = new TransactionService(_databaseService, deduplicationService, _categorizationService);
-            _budgetService = new BudgetService(_databaseService);
+            _budgetService = new BudgetServic_databaseService);
+            _analyzer = new BudgetAnalyzer(_transactionService, _categorizationService);
+
+            LoadCategories();
+            RefreshData();
+        }
+
+        [RelayCommand]
+        private void RefreshData()
+        {
+            var analyses = _budgetService.EvaluateAllBudgets();
+            Budgets = new ObservableCollection<BudgetAnalysisResult>(analyses.Values.OrderBy(b => b.Budget.Name));
+            Alerts = new ObservableCollection<BudgetAlert>(_budgetService.GetAlerts());
+            RefreshPlannedPayments();
+
+            if (SelectedBudget != null)
+            {
+                UpdatePeriodSummaries(SelectedBudget.Budget);
+            }
+            else if (Budgets.Any())
+            {
+                SelectedBudget = Budgets.First();
+            }
+        }
+
+        [RelayCommand]
+        private void AddBudget()
+        {
+            if (string.IsNullOrWhiteSpace(NewBudgetName))
+            {
+                return;
+            }
+
+            var budget = new Budget
+            {
+                Name = NewBudgetName.Trim(),
+                Category = NewBudgetCategory?.Trim() ?? string.Empty,
+                Limit = NewBudgetLimit,
+                AlertThreshold = NewBudgetAlertThreshold,
+                Frequency = SelectedFrequency,
+                StartDate = NewBudgetStartDate == default ? DateTime.UtcNow.Date : NewBudgetStartDate.Date,
+                Description = NewBudgetDescription ?? string.Empty
+            };
+
+            _budgetService.CreateBudget(budget);
+            RefreshData();
+            ClearForm();
+        }
+
+        [RelayCommand]
+        private void DeleteBudget(Guid budgetId)
+        {
+            _budgetService.DeleteBudget(budgetId);
+            RefreshData();
+        }
+
+        [RelayCommand]
+        private void RefreshCategories()
+        {
+            LoadCategories();
+        }
+
+        partial void OnSelectedBudgetChanged(BudgetAnalysisResult? value)
+        {
+            if (value != null)
+            {
+                UpdatePeriodSummaries(value.Budget);
+            }
+        }
+
+        private void UpdatePeriodSummaries(Budget budget)
+        {
+            MonthlySummaries = new ObservableCollection<BudgetPeriodSummary>(_analyzer.GetMonthlyView(budget, DateTime.UtcNow.Year));
+            YearlySummaries = new ObservableCollection<BudgetPeriodSummary>(_analyzer.GetYearlyView(budget, DateTime.UtcNow.Year - 1, 2));
+        }
+
+        private void LoadCategories()
+        {
+            var categoryList = _databaseService.GetTransactions()
+                .Where(t => !string.IsNullOrWhiteSpace(t.Category))
+                .Select(t => t.Category!)
+                .Distinct()
+                .OrderBy(c => c)
+                .ToList();
+
+            Categories = new ObservableCollection<string>(categoryList);
+        }
+
+        private void ClearForm()
+        {
+            NewBudgetName = string.Empty;
+            NewBudgetCategory = string.Empty;
+            NewBudgetLimit = 1000m;
+            NewBudgetAlertThreshold = 80;
+            NewBudgetDescription = string.Empty;
+            SelectedFrequency = BudgetFrequency.Monthly;
+            NewBudgetStartDate = DateTime.UtcNow.Date;
+        }
+
+        private void RefreshPlannedPayments()
+        {
+            var periodStart = new DateTime(DateTime.UtcNow.Year, DateTime.UtcNow.Month, 1);
+            var periodEnd = periodStart.AddMonths(2).AddDays(-1);
+            var recurring = _databaseService.GetRecurringTransactions(onlyActive: true);
+            var actualTransactions = _databaseService.GetTransactions(periodStart, periodEnd);
+            var planned = RecurringTransactionPlanner.Generate(recurring, actualTransactions, periodStart, periodEnd);
+
+            PlannedPayments = new ObservableCollection<PlannedTransaction>(planned);
+        }
+    }
+}
