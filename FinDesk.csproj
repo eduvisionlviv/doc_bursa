@@ -35,10 +35,4 @@
     <Compile Remove="Infrastructure/Repositories/**/*.cs" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Compile Remove="FinDesk.Tests/**/*.cs" />
-    <EmbeddedResource Remove="FinDesk.Tests/**/*" />
-    <None Remove="FinDesk.Tests/**/*" />
-  </ItemGroup>
-
 </Project>
