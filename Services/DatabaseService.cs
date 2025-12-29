@@ -625,20 +625,42 @@ namespace doc_bursa.Services
             connection.Open();
 
             var command = connection.CreateCommand();
-            command.CommandText = "SELECT AccountNumber, Balance FROM Accounts" + (onlyActive ? " WHERE IsActive = 1" : string.Empty);
+            command.CommandText = @"SELECT Id, Name, AccountNumber, Institution, Currency, Balance, IsActive, CreatedAt, UpdatedAt, AccountGroupId
+                                    FROM Accounts" + (onlyActive ? " WHERE IsActive = 1" : string.Empty);
 
             var accounts = new List<Account>();
             using var reader = command.ExecuteReader();
             while (reader.Read())
             {
-                var accountNumber = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
-                var balance = reader.IsDBNull(1) ? 0m : (decimal)reader.GetDouble(1);
+                var idRaw = reader.IsDBNull(0) ? null : reader.GetString(0);
+                var name = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+                var accountNumber = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+                var institution = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
+                var currency = reader.IsDBNull(4) ? "UAH" : reader.GetString(4);
+                var balance = reader.IsDBNull(5) ? 0m : (decimal)reader.GetDouble(5);
+                var isActive = !reader.IsDBNull(6) && reader.GetInt32(6) == 1;
 
-                accounts.Add(new Account
+                var createdAtRaw = reader.IsDBNull(7) ? null : reader.GetString(7);
+                var updatedAtRaw = reader.IsDBNull(8) ? null : reader.GetString(8);
+                var accountGroupId = reader.IsDBNull(9) ? (int?)null : reader.GetInt32(9);
+
+                var account = new Account
                 {
+                    Id = Guid.TryParse(idRaw, out var parsedId) ? parsedId : Guid.NewGuid(),
+                    Name = string.IsNullOrWhiteSpace(name) ? (string.IsNullOrWhiteSpace(accountNumber) ? "Account" : accountNumber) : name,
                     AccountNumber = accountNumber,
-                    Balance = balance
-                });
+                    Institution = institution,
+                    Currency = string.IsNullOrWhiteSpace(currency) ? "UAH" : currency,
+                    IsActive = isActive,
+                    AccountGroupId = accountGroupId,
+                    CreatedAt = DateTime.TryParse(createdAtRaw, out var createdAt) ? createdAt : DateTime.UtcNow,
+                    UpdatedAt = DateTime.TryParse(updatedAtRaw, out var updatedAt) ? updatedAt : null
+                };
+
+                // Balance має приватний setter, тому використовуємо доменний метод.
+                account.SetBalance(balance);
+
+                accounts.Add(account);
             }
 
             return accounts;
