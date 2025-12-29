@@ -15,10 +15,22 @@ namespace doc_bursa.Services
         private readonly DatabaseService _databaseService;
         private readonly ILogger _logger;
 
+        private readonly TransactionService? _transactionService;
+        private readonly CategorizationService? _categorizationService;
         public BudgetService(DatabaseService databaseService)
         {
             _databaseService = databaseService ?? throw new ArgumentNullException(nameof(databaseService));
             _logger = Log.ForContext<BudgetService>();
+        }
+
+        // Overload конструктор для ReportViewModel та інших сервісів
+        public BudgetService(
+            DatabaseService databaseService,
+            TransactionService transactionService,
+            CategorizationService categorizationService) : this(databaseService)
+        {
+            _transactionService = transactionService ?? throw new ArgumentNullException(nameof(transactionService));
+            _categorizationService = categorizationService ?? throw new ArgumentNullException(nameof(categorizationService));
         }
 
         // Методи для роботи з Budget (для BudgetViewModel та ReportService)
