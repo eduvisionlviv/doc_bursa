@@ -47,8 +47,12 @@ namespace doc_bursa.Models
 
         /// <summary>
         /// Поточний баланс рахунку.
+        /// 
+        /// Setter зроблено internal, щоб:
+        /// - дозволити гідратацію моделі з локальної БД в сервісному шарі;
+        /// - зберегти інкапсуляцію для зовнішніх збірок (public API не дає довільно змінювати баланс).
         /// </summary>
-        public decimal Balance { get; private set; }
+        public decimal Balance { get; internal set; }
 
         /// <summary>
         /// Активний/деактивований рахунок.
