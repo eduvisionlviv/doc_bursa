@@ -618,6 +618,32 @@ namespace doc_bursa.Services
             return accounts;
         }
 
+        // Accounts
+        public List<Account> GetAccounts(bool onlyActive = true)
+        {
+            using var connection = new SqliteConnection(_connectionString);
+            connection.Open();
+
+            var command = connection.CreateCommand();
+            command.CommandText = "SELECT AccountNumber, Balance FROM Accounts" + (onlyActive ? " WHERE IsActive = 1" : string.Empty);
+
+            var accounts = new List<Account>();
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                var accountNumber = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                var balance = reader.IsDBNull(1) ? 0m : (decimal)reader.GetDouble(1);
+
+                accounts.Add(new Account
+                {
+                    AccountNumber = accountNumber,
+                    Balance = balance
+                });
+            }
+
+            return accounts;
+        }
+
         // Transfer rules & matches
         public void SaveTransferRule(TransferRule rule)
         {

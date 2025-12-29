@@ -61,46 +61,52 @@ namespace doc_bursa.Services
                                               || ContainsKeyword(transaction.Source, PendingKeywords));
         }
 
-                /// <summary>
+        /// <summary>
         /// Отримати ефективні транзакції з урахуванням контексту MasterGroup.
         /// Перекази між рахунками однієї групи не враховуються. Для глобального перегляду всі внутрішні перекази ігноруються.
         /// </summary>
         public static List<Transaction> GetEffectiveTransactions(
-            IEnumerable<Transaction> allTransactions, 
+            IEnumerable<Transaction> allTransactions,
             HashSet<string>? contextAccountNumbers = null)
         {
+            if (allTransactions == null) throw new ArgumentNullException(nameof(allTransactions));
+
             var result = new List<Transaction>();
-            bool isGlobalContext = contextAccountNumbers == null || contextAccountNumbers.Count == 0;
+
+            // Глобальний контекст: усі внутрішні перекази не впливають на суму, тому їх ігноруємо.
+            if (contextAccountNumbers == null || contextAccountNumbers.Count == 0)
+            {
+                foreach (var tx in allTransactions)
+                {
+                    if (!tx.IsTransfer)
+                    {
+                        result.Add(tx);
+                    }
+                }
+
+                return result;
+            }
+
+            // Контекст конкретної MasterGroup.
+            var accountsInContext = contextAccountNumbers;
 
             foreach (var tx in allTransactions)
             {
-                // 1. Якщо це звичайна транзакція (не переказ) -> беремо завжди
+                // 1) Якщо це звичайна транзакція (не переказ) -> беремо завжди.
                 if (!tx.IsTransfer)
                 {
                     result.Add(tx);
                     continue;
                 }
 
-                // 2. Логіка для ПЕРЕКАЗІВ
-                if (isGlobalContext)
+                // 2) Для переказів у межах обраної MasterGroup показуємо тільки ті, де рахунок належить групі.
+                var account = tx.Account ?? string.Empty;
+                if (accountsInContext.Contains(account))
                 {
-                    // Глобальний вигляд: Ігноруємо внутрішні перекази, бо вони дають 0 в сумі.
-                    continue; 
-                }
-                else
-                {
-                    // Вигляд конкретної групи (MasterGroup)
-                    bool accountBelongsToGroup = contextAccountNumbers.Contains(tx.Account ?? string.Empty);
-
-                    if (accountBelongsToGroup)
-                    {
-                        // Якщо рахунок наш - показуємо транзакцію як є.
-                        // - Якщо це списання (-100) -> для групи це Витрата.
-                        // - Якщо це зарахування (+100) -> для групи це Дохід.
-                        result.Add(tx);
-                    }
+                    result.Add(tx);
                 }
             }
+
             return result;
         }
 
